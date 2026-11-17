@@ -50,6 +50,7 @@ export const api = {
   cronPreview: (expr: string) => invoke<string[]>("cron_preview", { expr }),
   autostartGet: () => invoke<AutostartStatus>("autostart_get"),
   autostartSet: (enabled: boolean) => invoke<AutostartStatus>("autostart_set", { enabled }),
+  getDataDir: () => invoke<string>("get_data_dir"),
   dataExport: () => invoke<string>("data_export"),
   dataImport: () => invoke<string>("data_import"),
 };

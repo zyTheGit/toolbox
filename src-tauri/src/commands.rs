@@ -300,6 +300,12 @@ pub fn autostart_set(enabled: bool) -> CmdResult<AutostartStatus> {
     autostart::set_enabled(enabled)
 }
 
+/// 返回应用实际使用的数据目录（跨平台，随系统而异）。
+#[tauri::command]
+pub fn get_data_dir(state: tauri::State<'_, AppState>) -> CmdResult<String> {
+    Ok(state.paths.data_dir.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub async fn data_export(state: tauri::State<'_, AppState>) -> CmdResult<String> {
     let picked = tauri::async_runtime::spawn_blocking(|| {

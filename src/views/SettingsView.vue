@@ -335,7 +335,7 @@
           </div>
           <div class="meta-row">
             <span class="meta-label">数据</span>
-            <span class="mono path-value">%APPDATA%\Toolbox</span>
+            <span class="mono path-value">{{ dataDir || "…" }}</span>
           </div>
         </div>
       </section>
@@ -531,8 +531,19 @@ async function retryLoad(): Promise<void> {
   }
 }
 
+// 数据目录随平台而异，展示后端解析出的实际路径。
+const dataDir = ref("");
+
 onMounted(() => {
   if (!store.config) resetDraft();
+  api
+    .getDataDir()
+    .then((dir) => {
+      dataDir.value = dir;
+    })
+    .catch(() => {
+      dataDir.value = "";
+    });
 });
 
 const dirty = computed(() => {

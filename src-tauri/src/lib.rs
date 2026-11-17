@@ -134,6 +134,7 @@ pub fn run() {
             commands::cron_preview,
             commands::autostart_get,
             commands::autostart_set,
+            commands::get_data_dir,
             commands::data_export,
             commands::data_import
         ])
