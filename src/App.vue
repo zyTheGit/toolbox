@@ -121,14 +121,14 @@ const navItems: Array<{ key: PageKey; label: string; icon: string }> = [
     icon: '<svg viewBox="0 0 24 24"><path d="M4 5h10"/><path d="M9 3v2"/><path d="M6 5c.6 3.6 2.8 6.4 6 8"/><path d="M11 5c-.6 3.4-2.6 6.2-5.5 8"/><path d="M4 19l4.5-10L13 19"/><path d="M6 15.5h5"/><path d="M16 8h5"/><path d="M18.5 6v2"/><path d="M15.5 8c.4 2.4 1.8 4.4 3.9 5.7"/><path d="M20 8c-.4 2.4-1.8 4.4-3.9 5.7"/></svg>',
   },
   {
-    key: "download",
-    label: "m3u8 下载",
-    icon: '<svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 18h16"/><path d="M4 20h16"/></svg>',
-  },
-  {
     key: "tasks",
     label: "定时任务",
     icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/><path d="M4 4l1.5 3"/><path d="M20 4l-1.5 3"/></svg>',
+  },
+  {
+    key: "download",
+    label: "m3u8 下载",
+    icon: '<svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 18h16"/><path d="M4 20h16"/></svg>',
   },
   {
     key: "dev",
