@@ -153,11 +153,18 @@ where
             },
             Some(code) => {
                 let tail = last_line(&lines);
-                let error = if tail.is_empty() {
-                    format!("命令退出码 {code}")
+                let shell = shell_label(&spec.program);
+                let mut error = if tail.is_empty() {
+                    format!("命令退出码 {code}（{shell}）")
                 } else {
-                    format!("命令退出码 {code}: {tail}")
+                    format!("命令退出码 {code}（{shell}）: {tail}")
                 };
+                // cmd 下误用 PowerShell 语法（如行首 & 调用符）是最常见的失败原因，
+                // 附提示引导到任务的 Shell 选项，降低排错成本。
+                #[cfg(windows)]
+                if spec.program.eq_ignore_ascii_case("cmd") {
+                    error.push_str("。提示：cmd 不支持 PowerShell 语法（如 & 调用符），可在任务高级选项中切换 Shell");
+                }
                 ExecOutcome {
                     status: "failed",
                     exit_code: Some(code),
@@ -213,6 +220,19 @@ fn last_line(lines: &VecDeque<String>) -> String {
             }
         })
         .unwrap_or_default()
+}
+
+/// 展示用的 Shell 名称标签。
+fn shell_label(program: &str) -> &'static str {
+    if program.eq_ignore_ascii_case("powershell") {
+        "PowerShell"
+    } else if program.eq_ignore_ascii_case("cmd") {
+        "cmd"
+    } else if program == "sh" {
+        "sh"
+    } else {
+        "未知 Shell"
+    }
 }
 
 async fn pump<R>(reader: R, sender: mpsc::UnboundedSender<String>)
