@@ -52,9 +52,11 @@ jobs:
         env:
           RUST_BACKTRACE: "1"
         run: |
-          cargo test --manifest-path src-tauri/Cargo.toml --no-run
           if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
-            timeout 180 cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1 scheduler::command::exec
+            cargo test --manifest-path src-tauri/Cargo.toml --no-run --message-format=json > /tmp/tests.json
+            BIN=$(grep -o '"executable":"[^"]*"' /tmp/tests.json | tail -1 | cut -d'"' -f4)
+            echo "测试二进制: $BIN"
+            timeout 150 "$BIN" --test-threads=1 --nocapture
           else
             cargo test --manifest-path src-tauri/Cargo.toml
           fi
