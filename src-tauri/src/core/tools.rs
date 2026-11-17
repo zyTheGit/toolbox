@@ -100,7 +100,7 @@ fn locate(tool: &str, configured: &str, paths: &AppPaths) -> Option<PathBuf> {
     None
 }
 
-fn exe_file(tool: &str) -> String {
+pub(crate) fn exe_file(tool: &str) -> String {
     let base = if tool == "ytdlp" { "yt-dlp" } else { "ffmpeg" };
     if cfg!(windows) {
         format!("{base}.exe")
@@ -178,7 +178,7 @@ fn read_version_with_timeout(tool: &str, path: &Path, timeout: Duration) -> Stri
 
 /// Validate the downloaded binary, then swap it in while keeping the previous
 /// version as a rollback target. A failed probe restores the old file.
-fn install_binary(src: &Path, dest: &Path, tool: &str) -> Result<(), String> {
+pub(crate) fn install_binary(src: &Path, dest: &Path, tool: &str) -> Result<(), String> {
     if read_version_with_timeout(tool, src, Duration::from_secs(10)).is_empty() {
         let _ = std::fs::remove_file(src);
         return Err(format!(
@@ -300,7 +300,7 @@ fn parse_bare_sha256(text: &str) -> Option<String> {
 
 /// Compare a downloaded file's SHA-256 against the official hash. A mismatch is
 /// a hard failure: the caller must discard the download and keep the old tool.
-fn verify_sha256(path: &Path, expected: &str, what: &str) -> Result<(), String> {
+pub(crate) fn verify_sha256(path: &Path, expected: &str, what: &str) -> Result<(), String> {
     let actual = sha256_hex(path)?;
     if !actual.eq_ignore_ascii_case(expected.trim()) {
         return Err(format!(
@@ -441,51 +441,54 @@ async fn install_ffmpeg(
     config: &AppConfig,
     paths: &AppPaths,
 ) -> Result<(), String> {
-    if !cfg!(windows) {
-        return Err("[TOOL] 当前平台暂不支持自动安装 ffmpeg，请自行安装".into());
+    #[cfg(not(windows))]
+    {
+        crate::core::tool_sources::install_ffmpeg_static(client, app, config, paths).await
     }
+    #[cfg(windows)]
+    {
+        let url = with_mirror(FFMPEG_ZIP, &config.tool_download_mirror);
+        let temp_dir = paths
+            .bin_dir
+            .join(format!(".tmp-ffmpeg-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {e}"))?;
+        let zip = temp_dir.join("ffmpeg.zip");
 
-    let url = with_mirror(FFMPEG_ZIP, &config.tool_download_mirror);
-    let temp_dir = paths
-        .bin_dir
-        .join(format!(".tmp-ffmpeg-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {e}"))?;
-    let zip = temp_dir.join("ffmpeg.zip");
+        let outcome = async {
+            download_file(client, &url, &zip, app, "ffmpeg").await?;
+            verify_ffmpeg_checksum(client, &zip, &url).await?;
+            emit_progress(app, "ffmpeg", "extract", Some(0.0), 0, 0);
+            expand_archive(&zip, &temp_dir).await?;
 
-    let outcome = async {
-        download_file(client, &url, &zip, app, "ffmpeg").await?;
-        verify_ffmpeg_checksum(client, &zip, &url).await?;
-        emit_progress(app, "ffmpeg", "extract", Some(0.0), 0, 0);
-        expand_archive(&zip, &temp_dir).await?;
-
-        let ffmpeg_src = find_file(&temp_dir, "ffmpeg.exe", 6)
-            .ok_or_else(|| "压缩包中未找到 ffmpeg.exe".to_string())?;
-        if read_version_with_timeout("ffmpeg", &ffmpeg_src, Duration::from_secs(10)).is_empty() {
-            return Err("[TOOL] ffmpeg.exe 无法运行，已放弃安装（旧版本保持不变）".into());
-        }
-
-        if let Some(ffprobe_src) = find_file(&temp_dir, "ffprobe.exe", 6) {
-            let probe_dest = paths.bin_dir.join("ffprobe.exe");
-            match swap_in(&ffprobe_src, &probe_dest) {
-                Ok(backup) => {
-                    if let Some(backup) = backup {
-                        let _ = std::fs::remove_file(backup);
-                    }
-                }
-                Err(err) => return Err(format!("[PATH] 保存 ffprobe.exe 失败: {err}")),
+            let ffmpeg_src = find_file(&temp_dir, "ffmpeg.exe", 6)
+                .ok_or_else(|| "压缩包中未找到 ffmpeg.exe".to_string())?;
+            if read_version_with_timeout("ffmpeg", &ffmpeg_src, Duration::from_secs(10)).is_empty() {
+                return Err("[TOOL] ffmpeg.exe 无法运行，已放弃安装（旧版本保持不变）".into());
             }
+
+            if let Some(ffprobe_src) = find_file(&temp_dir, "ffprobe.exe", 6) {
+                let probe_dest = paths.bin_dir.join("ffprobe.exe");
+                match swap_in(&ffprobe_src, &probe_dest) {
+                    Ok(backup) => {
+                        if let Some(backup) = backup {
+                            let _ = std::fs::remove_file(backup);
+                        }
+                    }
+                    Err(err) => return Err(format!("[PATH] 保存 ffprobe.exe 失败: {err}")),
+                }
+            }
+
+            let dest = paths.bin_dir.join("ffmpeg.exe");
+            install_binary(&ffmpeg_src, &dest, "ffmpeg")?;
+
+            emit_progress(app, "ffmpeg", "extract", Some(100.0), 0, 0);
+            Ok(())
         }
+        .await;
 
-        let dest = paths.bin_dir.join("ffmpeg.exe");
-        install_binary(&ffmpeg_src, &dest, "ffmpeg")?;
-
-        emit_progress(app, "ffmpeg", "extract", Some(100.0), 0, 0);
-        Ok(())
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        outcome
     }
-    .await;
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
-    outcome
 }
 
 fn ytdlp_url() -> &'static str {
@@ -498,7 +501,7 @@ fn ytdlp_url() -> &'static str {
     }
 }
 
-fn with_mirror(url: &str, mirror: &str) -> String {
+pub(crate) fn with_mirror(url: &str, mirror: &str) -> String {
     let prefix = mirror.trim();
     if prefix.is_empty() {
         return url.to_string();
@@ -530,7 +533,7 @@ fn build_client(config: &AppConfig) -> Result<Client, String> {
         .map_err(|e| format!("[NETWORK] 初始化网络客户端失败: {e}"))
 }
 
-async fn download_file(
+pub(crate) async fn download_file(
     client: &Client,
     url: &str,
     dest: &Path,

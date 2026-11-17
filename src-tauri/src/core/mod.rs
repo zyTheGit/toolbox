@@ -6,5 +6,6 @@ pub mod notify;
 pub mod persist;
 pub mod quick;
 pub mod secrets;
+pub mod tool_sources;
 pub mod tools;
 pub mod translate;
