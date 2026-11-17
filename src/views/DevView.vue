@@ -49,6 +49,11 @@ const tool = ref("json");
   /* 默认 stretch：两张卡片等高，避免空白露出页面底色 */
 }
 
+/* 全局 .card + .card 的上下间距会把网格里的卡片压下去，这里抵消 */
+.assist-grid > .card {
+  margin-top: 0;
+}
+
 @media (max-width: 900px) {
   .assist-grid {
     grid-template-columns: minmax(0, 1fr);

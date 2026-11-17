@@ -200,6 +200,11 @@ onBeforeUnmount(() => {
   /* 默认 stretch：同一行的卡片等高，避免空白露出页面底色 */
 }
 
+/* 全局 .card + .card 的上下间距会把网格里的卡片逐个压下去，这里抵消 */
+.coder-grid > .card {
+  margin-top: 0;
+}
+
 .card {
   background: var(--panel-soft);
   border: 1px solid var(--border);
