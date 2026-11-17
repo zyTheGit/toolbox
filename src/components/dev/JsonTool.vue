@@ -45,6 +45,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { NAlert, NButton, NInput, NSelect, useMessage } from "naive-ui";
+import { jsonToTs } from "../../utils/json-to-ts";
 
 const message = useMessage();
 
@@ -94,48 +95,8 @@ function minifyJson(): void {
 function genTs(): void {
   const data = parseInput();
   if (data === null) return;
-  const interfaces = new Map<string, string>();
-  const rootType = inferType(data, "Root", interfaces);
-  const blocks = [...interfaces.values()];
-  const output = blocks.length ? blocks.join("\n\n") : "";
-  if (Array.isArray(data)) {
-    result.value = output ? `${output}\n\ntype Root = ${rootType}` : `type Root = ${rootType}`;
-  } else if (output) {
-    result.value = `${output}\n\ntype Root = ${rootType}`;
-  } else {
-    result.value = `type Root = ${rootType}`;
-  }
+  result.value = jsonToTs(data);
   resultLabel.value = "TypeScript 类型定义";
-}
-
-/** Pascal 化命名：root_user_addr → RootUserAddr */
-function pascal(name: string): string {
-  return name
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
-}
-
-/** 递归推断 JSON 值对应的 TS 类型，对象与数组元素收集为 interface。 */
-function inferType(value: unknown, name: string, interfaces: Map<string, string>): string {
-  if (value === null) return "null";
-  if (Array.isArray(value)) {
-    if (!value.length) return "unknown[]";
-    const elemTypes = [...new Set(value.map((item, i) => inferType(item, `${name}${i}`, interfaces)))];
-    return `${elemTypes.join(" | ")}[]`;
-  }
-  if (typeof value === "object") {
-    const key = pascal(name);
-    const lines = Object.entries(value as Record<string, unknown>).map(([prop, child]) => {
-      const safeProp = /^[A-Za-z_$][\w$]*$/.test(prop) ? prop : JSON.stringify(prop);
-      return `  ${safeProp}: ${inferType(child, `${name}_${prop}`, interfaces)};`;
-    });
-    const body = lines.length ? lines.join("\n") : "  [key: string]: unknown;";
-    interfaces.set(key, `interface ${key} {\n${body}\n}`);
-    return key;
-  }
-  return typeof value;
 }
 
 function copyResult(): void {
