@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch, defineAsyncComponent } from "vue";
 import {
   NAlert,
   NButton,
@@ -110,10 +110,11 @@ import {
 } from "naive-ui";
 import { connectEvents, loadSnapshot, store } from "./store";
 import { events } from "./api";
-import TranslateView from "./views/TranslateView.vue";
-import DownloadView from "./views/DownloadView.vue";
-import TasksView from "./views/TasksView.vue";
-import SettingsView from "./views/SettingsView.vue";
+// 视图异步分包：首屏只加载当前视图，减小主 chunk 体积。
+const TranslateView = defineAsyncComponent(() => import("./views/TranslateView.vue"));
+const DownloadView = defineAsyncComponent(() => import("./views/DownloadView.vue"));
+const TasksView = defineAsyncComponent(() => import("./views/TasksView.vue"));
+const SettingsView = defineAsyncComponent(() => import("./views/SettingsView.vue"));
 
 type PageKey = "translate" | "download" | "tasks" | "settings";
 
