@@ -57,6 +57,11 @@ pub fn run() {
                 state::push_warning(&warnings, message);
             }
             let history = Arc::new(history);
+            let (llm_usage, usage_warning) =
+                core::llm::LlmUsageStore::load(paths.llm_usage_file.clone());
+            if let Some(message) = usage_warning {
+                state::push_warning(&warnings, message);
+            }
             let downloader = Arc::new(core::downloader::Downloader::new(
                 app.handle().clone(),
                 paths.clone(),
@@ -74,6 +79,7 @@ pub fn run() {
                 paths,
                 config: shared,
                 secrets: Arc::new(secrets),
+                llm_usage: Arc::new(llm_usage),
                 warnings,
                 history,
                 downloader,
@@ -143,7 +149,9 @@ pub fn run() {
             commands::secrets::secrets_list,
             commands::secrets::secret_save,
             commands::secrets::secret_delete,
-            commands::secrets::secret_reveal
+            commands::secrets::secret_reveal,
+            commands::ai::llm_run,
+            commands::ai::llm_usage,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

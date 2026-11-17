@@ -106,9 +106,10 @@ const TranslateView = defineAsyncComponent(() => import("./views/TranslateView.v
 const DownloadView = defineAsyncComponent(() => import("./views/DownloadView.vue"));
 const TasksView = defineAsyncComponent(() => import("./views/TasksView.vue"));
 const DevView = defineAsyncComponent(() => import("./views/DevView.vue"));
+const AiView = defineAsyncComponent(() => import("./views/AiView.vue"));
 const SettingsView = defineAsyncComponent(() => import("./views/SettingsView.vue"));
 
-type PageKey = "translate" | "download" | "tasks" | "dev" | "settings";
+type PageKey = "translate" | "download" | "tasks" | "dev" | "ai" | "settings";
 
 const page = ref<PageKey>("translate");
 
@@ -118,6 +119,7 @@ const views = {
   download: DownloadView,
   tasks: TasksView,
   dev: DevView,
+  ai: AiView,
   settings: SettingsView,
 };
 
@@ -141,6 +143,11 @@ const navItems: Array<{ key: PageKey; label: string; icon: string }> = [
     key: "dev",
     label: "开发工具",
     icon: '<svg viewBox="0 0 24 24"><path d="M8 6l-5 6 5 6"/><path d="M16 6l5 6-5 6"/><path d="M13.5 4l-3 16"/></svg>',
+  },
+  {
+    key: "ai",
+    label: "AI 工具",
+    icon: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg>',
   },
   {
     key: "settings",
@@ -192,6 +199,7 @@ function isPage(value: string): value is PageKey {
     value === "download" ||
     value === "tasks" ||
     value === "dev" ||
+    value === "ai" ||
     value === "settings"
   );
 }

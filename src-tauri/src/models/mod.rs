@@ -2,6 +2,7 @@
 
 mod config;
 mod download;
+mod llm;
 mod snapshot;
 mod task;
 mod translate;
@@ -13,6 +14,10 @@ pub use config::{
 };
 pub use download::{
     DownloadRequest, Job, JobProgress, ToolInstallResult, ToolProgress, ToolStatus, ToolsStatus,
+};
+pub use llm::{
+    LlmConfig, LlmProviderConfig, LlmRequest, LlmResponse, LlmTemplate, LlmUsageDay, LlmUsageModel,
+    LlmUsageSummary,
 };
 pub use snapshot::{AppSnapshot, AutostartStatus, ConfigResult};
 pub use task::{Task, TaskInput, TaskPayload, TaskRun};

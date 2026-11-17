@@ -7,6 +7,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::core::downloader::Downloader;
 use crate::core::history::HistoryStore;
+use crate::core::llm::LlmUsageStore;
 use crate::core::secrets::SecretStore;
 use crate::models::AppConfig;
 use crate::scheduler::Scheduler;
@@ -37,6 +38,7 @@ pub struct AppPaths {
     pub tasks_file: PathBuf,
     pub secrets_file: PathBuf,
     pub runs_dir: PathBuf,
+    pub llm_usage_file: PathBuf,
 }
 
 impl AppPaths {
@@ -55,6 +57,7 @@ impl AppPaths {
             tasks_file: data_dir.join("tasks.json"),
             secrets_file: data_dir.join("secrets.bin"),
             runs_dir: data_dir.join("runs"),
+            llm_usage_file: data_dir.join("llm-usage.json"),
             data_dir,
         }
     }
@@ -71,6 +74,7 @@ pub struct AppState {
     pub paths: AppPaths,
     pub config: SharedConfig,
     pub secrets: Arc<SecretStore>,
+    pub llm_usage: Arc<LlmUsageStore>,
     pub warnings: Warnings,
     pub history: Arc<HistoryStore>,
     pub downloader: Arc<Downloader>,

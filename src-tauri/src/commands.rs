@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod secrets;
 
 use std::path::PathBuf;

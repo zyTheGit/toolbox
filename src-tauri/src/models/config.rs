@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::LlmConfig;
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolPaths {
@@ -185,4 +187,6 @@ pub struct AppConfig {
     pub notify: NotifyConfig,
     #[serde(default)]
     pub quick_translate: QuickTranslateConfig,
+    #[serde(default)]
+    pub llm: LlmConfig,
 }

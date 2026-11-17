@@ -9,6 +9,9 @@ import type {
   HistoryPage,
   HistoryQuery,
   Job,
+  LlmRequest,
+  LlmResponse,
+  LlmUsageSummary,
   SecretEntryInput,
   SecretEntryView,
   SecretPatch,
@@ -60,6 +63,8 @@ export const api = {
     invoke<SecretEntryView[]>("secret_save", { input }),
   secretDelete: (id: string) => invoke<SecretEntryView[]>("secret_delete", { id }),
   secretReveal: (id: string) => invoke<string>("secret_reveal", { id }),
+  llmRun: (request: LlmRequest) => invoke<LlmResponse[]>("llm_run", { request }),
+  llmUsage: (days = 7) => invoke<LlmUsageSummary>("llm_usage", { days }),
 };
 
 export const events = {

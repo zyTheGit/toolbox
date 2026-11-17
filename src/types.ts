@@ -100,6 +100,69 @@ export interface QuickTranslateConfig {
   shortcut: string;
 }
 
+export interface LlmProviderConfig {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  keyEntryId: string;
+  temperature: number;
+}
+
+export interface LlmTemplate {
+  id: string;
+  name: string;
+  content: string;
+}
+
+export interface LlmConfig {
+  providers: LlmProviderConfig[];
+  templates: LlmTemplate[];
+}
+
+export interface LlmRequest {
+  providerIds: string[];
+  system: string;
+  prompt: string;
+  temperature?: number | null;
+  maxTokens?: number | null;
+}
+
+export interface LlmResponse {
+  providerId: string;
+  providerName: string;
+  model: string;
+  content: string;
+  error: string;
+  latencyMs: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface LlmUsageDay {
+  date: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export interface LlmUsageModel {
+  model: string;
+  providerName: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export interface LlmUsageSummary {
+  days: LlmUsageDay[];
+  models: LlmUsageModel[];
+  totalCalls: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+}
+
 export interface SecretEntryView {
   id: string;
   name: string;
@@ -137,6 +200,7 @@ export interface AppConfig {
   security: SecurityConfig;
   notify: NotifyConfig;
   quickTranslate: QuickTranslateConfig;
+  llm: LlmConfig;
 }
 
 export interface ProviderInfo {

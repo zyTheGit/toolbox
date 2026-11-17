@@ -2,6 +2,7 @@ pub mod backup;
 pub mod config;
 pub mod downloader;
 pub mod history;
+pub mod llm;
 pub mod notify;
 pub mod persist;
 pub mod proc;

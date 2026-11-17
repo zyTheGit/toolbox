@@ -58,6 +58,21 @@ pub fn normalize(config: &mut AppConfig, paths: &AppPaths) {
     }
     config.translate.tts_rate = config.translate.tts_rate.clamp(0.5, 2.0);
     config.quick_translate.shortcut = config.quick_translate.shortcut.trim().to_string();
+    for provider in &mut config.llm.providers {
+        provider.id = provider.id.trim().to_string();
+        provider.name = provider.name.trim().to_string();
+        provider.base_url = provider.base_url.trim().to_string();
+        provider.model = provider.model.trim().to_string();
+        provider.key_entry_id = provider.key_entry_id.trim().to_string();
+        if !provider.temperature.is_finite() {
+            provider.temperature = 0.7;
+        }
+        provider.temperature = provider.temperature.clamp(0.0, 2.0);
+    }
+    for template in &mut config.llm.templates {
+        template.id = template.id.trim().to_string();
+        template.name = template.name.trim().to_string();
+    }
     if config.schema_version == 0 || config.schema_version < CONFIG_SCHEMA_VERSION {
         config.schema_version = CONFIG_SCHEMA_VERSION;
     }
@@ -84,6 +99,33 @@ pub fn validate(config: &AppConfig) -> Result<(), String> {
     }
     if config.quick_translate.enabled && config.quick_translate.shortcut.is_empty() {
         return Err("[PARAM] 启用快捷翻译时需要填写快捷键".into());
+    }
+    let mut provider_ids = std::collections::HashSet::new();
+    for provider in &config.llm.providers {
+        if provider.id.is_empty() || provider.name.is_empty() {
+            return Err("[PARAM] 模型配置缺少 ID 或名称".into());
+        }
+        if !provider_ids.insert(provider.id.as_str()) {
+            return Err(format!("[PARAM] 模型配置 ID 重复: {}", provider.id));
+        }
+        if provider.model.is_empty() {
+            return Err(format!("[PARAM] 模型「{}」缺少模型名", provider.name));
+        }
+        if !provider.base_url.starts_with("http://") && !provider.base_url.starts_with("https://") {
+            return Err(format!("[PARAM] 模型「{}」的接口地址需以 http(s):// 开头", provider.name));
+        }
+    }
+    let mut template_ids = std::collections::HashSet::new();
+    for template in &config.llm.templates {
+        if template.id.is_empty() || template.name.is_empty() {
+            return Err("[PARAM] Prompt 模板缺少 ID 或名称".into());
+        }
+        if !template_ids.insert(template.id.as_str()) {
+            return Err(format!("[PARAM] Prompt 模板 ID 重复: {}", template.id));
+        }
+        if template.content.trim().is_empty() {
+            return Err(format!("[PARAM] Prompt 模板「{}」内容为空", template.name));
+        }
     }
     Ok(())
 }

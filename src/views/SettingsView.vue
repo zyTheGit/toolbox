@@ -371,6 +371,7 @@ import {
 import { api } from "../api";
 import { loadSnapshot, store } from "../store";
 import { describeError } from "../utils/errors";
+import { defaultLlmConfig } from "../utils/llm";
 import type {
   AppConfig,
   ProviderId,
@@ -433,6 +434,7 @@ function emptyConfig(): AppConfig {
     security: { allowCommands: false },
     notify: { download: true, task: true },
     quickTranslate: { enabled: false, shortcut: "CommandOrControl+Shift+T" },
+    llm: defaultLlmConfig(),
   };
 }
 
