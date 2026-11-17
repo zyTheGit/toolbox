@@ -12,6 +12,9 @@
       <n-tab-pane name="regex" tab="正则测试">
         <RegexTool />
       </n-tab-pane>
+      <n-tab-pane name="curl" tab="curl 转换">
+        <CurlTool />
+      </n-tab-pane>
       <n-tab-pane name="assist" tab="辅助工具">
         <div class="assist-grid">
           <PasswordTool />
@@ -29,6 +32,7 @@ import PageHead from "../components/PageHead.vue";
 import JsonTool from "../components/dev/JsonTool.vue";
 import CoderTool from "../components/dev/CoderTool.vue";
 import RegexTool from "../components/dev/RegexTool.vue";
+import CurlTool from "../components/dev/CurlTool.vue";
 import PasswordTool from "../components/dev/PasswordTool.vue";
 import CaseTool from "../components/dev/CaseTool.vue";
 
