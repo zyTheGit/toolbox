@@ -28,7 +28,8 @@ where
         .current_dir(&spec.work_dir)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
     for (key, value) in &spec.env {
         cmd.env(key, value);
     }
@@ -72,6 +73,8 @@ where
     let mut killed = false;
     let mut read_closed = false;
     let mut dirty = false;
+    // 发出终止信号后的兜底期限：即使回收失败也不再阻塞调用方。
+    let mut give_up: Option<tokio::time::Instant> = None;
 
     loop {
         if wait_result.is_some() {
@@ -93,12 +96,17 @@ where
             _ = &mut deadline, if !timed_out && wait_result.is_none() => {
                 timed_out = true;
                 killed = true;
+                give_up = Some(tokio::time::Instant::now() + Duration::from_secs(3));
                 kill_tree(pid);
             }
             _ = ticker.tick() => {
                 if !killed && wait_result.is_none() && cancel.load(Ordering::SeqCst) {
                     killed = true;
+                    give_up = Some(tokio::time::Instant::now() + Duration::from_secs(3));
                     kill_tree(pid);
+                }
+                if give_up.is_some_and(|limit| tokio::time::Instant::now() >= limit) {
+                    break;
                 }
                 if dirty {
                     let snapshot: Vec<String> = lines.iter().cloned().collect();
@@ -282,13 +290,7 @@ mod tests {
             env: Vec::new(),
             timeout: Duration::from_millis(300),
         };
-        let outcome = run_command(
-            spec,
-            Arc::new(AtomicBool::new(false)),
-            |pid| eprintln!("[diag] spawned child pid={pid} harness={}", std::process::id()),
-            |_| {},
-        )
-        .await;
+        let outcome = run_command(spec, Arc::new(AtomicBool::new(false)), |_| {}, |_| {}).await;
         assert_eq!(outcome.status, "failed");
         assert!(outcome.error.starts_with("[TIMEOUT]"));
     }

@@ -22,7 +22,7 @@ pub(crate) use self::args::redact_text;
 use self::args::validate_extra_args;
 use self::naming::{job_name, now_string, sanitize_file_name};
 use self::state::{is_active, mark_interrupted};
-use self::worker::kill_tree;
+use crate::core::proc::kill_tree;
 
 #[cfg(test)]
 mod tests;
