@@ -93,5 +93,7 @@ function copy(): void {
   background: var(--card, #fff);
   border: 1px solid var(--border);
   border-radius: 6px;
+  max-height: 160px;
+  overflow: auto;
 }
 </style>

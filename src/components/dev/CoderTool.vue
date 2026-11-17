@@ -240,12 +240,17 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: 6px;
   word-break: break-all;
+  /* 结果过长时限制高度并出现滚动条，避免撑破卡片 */
+  max-height: 160px;
+  overflow: auto;
 }
 
 .uuid-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  max-height: 160px;
+  overflow: auto;
 }
 
 .uuid-row {

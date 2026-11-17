@@ -234,6 +234,8 @@ function clearAll(): void {
   margin: 8px 0 0;
   padding: 8px 10px;
   overflow-x: auto;
+  max-height: 160px;
+  overflow-y: auto;
   font-size: 12.5px;
   line-height: 1.6;
   white-space: pre;

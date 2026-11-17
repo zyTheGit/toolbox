@@ -59,7 +59,7 @@
       </div>
     </div>
 
-    <div v-if="matches.length" class="card">
+    <div v-if="matches.length" class="card matches-card">
       <div
         v-for="(match, index) in matches"
         :key="index"
@@ -272,6 +272,13 @@ function copyMatches(): void {
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.matches-card {
+  max-height: 260px;
+  overflow: auto;
 }
 
 .hit {
