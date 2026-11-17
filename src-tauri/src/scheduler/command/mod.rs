@@ -4,7 +4,7 @@ mod exec;
 mod vars;
 
 pub use exec::run_command;
-pub use vars::{expand_path, expand_vars, parse_env};
+pub use vars::{expand_path, parse_env};
 
 use std::path::PathBuf;
 use std::time::Duration;
