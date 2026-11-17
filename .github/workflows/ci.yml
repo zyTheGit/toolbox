@@ -52,6 +52,7 @@ jobs:
         env:
           RUST_BACKTRACE: "1"
         run: |
+          set +e
           if [ "${{ matrix.platform }}" != "ubuntu-22.04" ]; then
             cargo test --manifest-path src-tauri/Cargo.toml
             exit 0

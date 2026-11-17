@@ -136,6 +136,12 @@ pub fn kill_tree(pid: u32) {
             proc_field(pid, 3),
             std::path::Path::new(&format!("/proc/{pid}")).exists(),
         );
+        if let Ok(out) = Command::new("ps")
+            .args(["-eo", "pid,ppid,pgid,sid,stat,comm"])
+            .output()
+        {
+            eprintln!("[diag] ps:\n{}", String::from_utf8_lossy(&out.stdout));
+        }
         match Command::new("kill")
             .args(["-9", group.as_str()])
             .stdin(Stdio::null())
