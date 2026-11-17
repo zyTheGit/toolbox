@@ -53,10 +53,13 @@ jobs:
           RUST_BACKTRACE: "1"
         run: |
           if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
-            cargo test --manifest-path src-tauri/Cargo.toml --no-run --message-format=json > /tmp/tests.json
-            BIN=$(grep -o '"executable":"[^"]*"' /tmp/tests.json | tail -1 | cut -d'"' -f4)
+            cargo test --manifest-path src-tauri/Cargo.toml --no-run
+            BIN=$(ls src-tauri/target/debug/deps/toolbox-* | grep -v '\.d$' | head -1)
             echo "测试二进制: $BIN"
-            timeout 150 "$BIN" --test-threads=1 --nocapture
+            timeout 60 "$BIN" --test-threads=1 > /tmp/single.log 2>&1
+            echo "单线程退出码: $?"; tail -3 /tmp/single.log
+            timeout 90 "$BIN" --nocapture > /tmp/par.log 2>&1
+            echo "并行退出码: $?"; tail -60 /tmp/par.log
           else
             cargo test --manifest-path src-tauri/Cargo.toml
           fi
