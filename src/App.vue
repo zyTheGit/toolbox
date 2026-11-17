@@ -1,5 +1,9 @@
 <template>
-  <n-config-provider :theme-overrides="themeOverrides">
+  <n-config-provider
+    :theme-overrides="themeOverrides"
+    :locale="zhCN"
+    :date-locale="dateZhCN"
+  >
     <n-message-provider>
       <n-dialog-provider>
         <div class="app-shell">
@@ -106,6 +110,8 @@ import {
   NDialogProvider,
   NMessageProvider,
   NSpin,
+  dateZhCN,
+  zhCN,
   type GlobalThemeOverrides,
 } from "naive-ui";
 import { connectEvents, loadSnapshot, store } from "./store";
