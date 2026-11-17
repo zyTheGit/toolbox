@@ -1,14 +1,17 @@
 <template>
-  <div class="hist-item" :class="{ compact }">
+  <div ref="rootEl" class="hist-item" :class="{ compact }">
     <div class="hist-main">
-      <div class="hist-text" :class="compact ? 'clamp-1' : 'clamp-4'">{{ entry.text }}</div>
-      <div class="hist-result" :class="compact ? 'clamp-1' : 'clamp-4'">{{ entry.result }}</div>
+      <div ref="textEl" class="hist-text" :class="clampClass">{{ entry.text }}</div>
+      <div ref="resultEl" class="hist-result" :class="clampClass">{{ entry.result }}</div>
       <div class="hist-meta muted">
         <span class="mono">{{ formatTime(entry.createdAt) }}</span>
         <span class="sep">·</span>
         <span>{{ entry.providerName }}</span>
         <span class="sep">·</span>
         <span>{{ langLabel(entry.source) }} → {{ langLabel(entry.target) }}</span>
+        <n-button v-if="overflowing" class="expand-btn" text size="tiny" @click="toggleExpand">
+          {{ expanded ? "收起" : "展开" }}
+        </n-button>
       </div>
     </div>
 
@@ -52,10 +55,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { NButton, NPopconfirm } from "naive-ui";
 import type { HistoryEntry } from "../../types";
 
-defineProps<{ entry: HistoryEntry; compact?: boolean; retranslating?: boolean }>();
+const props = defineProps<{ entry: HistoryEntry; compact?: boolean; retranslating?: boolean }>();
 
 const emit = defineEmits<{
   (e: "load"): void;
@@ -66,6 +70,55 @@ const emit = defineEmits<{
 }>();
 
 const LANG_LABELS: Record<string, string> = { zh: "中文", en: "英文" };
+
+const expanded = ref(false);
+const overflowing = ref(false);
+const rootEl = ref<HTMLElement | null>(null);
+const textEl = ref<HTMLElement | null>(null);
+const resultEl = ref<HTMLElement | null>(null);
+
+const clampClass = computed(() => {
+  if (expanded.value) return "";
+  return props.compact ? "clamp-1" : "clamp-2";
+});
+
+function measure(): void {
+  if (expanded.value) return;
+  const els = [textEl.value, resultEl.value];
+  overflowing.value = els.some((el) => !!el && el.scrollHeight - el.clientHeight > 1);
+}
+
+function remeasure(): void {
+  void nextTick(measure);
+}
+
+function toggleExpand(): void {
+  expanded.value = !expanded.value;
+  if (!expanded.value) remeasure();
+}
+
+let resizeObserver: ResizeObserver | undefined;
+
+watch(
+  () => props.entry.id,
+  () => {
+    expanded.value = false;
+    remeasure();
+  },
+);
+
+onMounted(() => {
+  remeasure();
+  if (typeof ResizeObserver !== "undefined" && rootEl.value) {
+    resizeObserver = new ResizeObserver(() => measure());
+    resizeObserver.observe(rootEl.value);
+  }
+});
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = undefined;
+});
 
 function formatTime(iso: string): string {
   if (!iso) return "—";
@@ -86,8 +139,8 @@ function langLabel(code: string): string {
 <style scoped>
 .hist-item {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
@@ -98,11 +151,9 @@ function langLabel(code: string): string {
 
 .hist-item.compact {
   padding: 10px 0;
-  gap: 10px;
 }
 
 .hist-main {
-  flex: 1;
   min-width: 0;
 }
 
@@ -143,7 +194,7 @@ function langLabel(code: string): string {
 }
 
 .clamp-1,
-.clamp-4 {
+.clamp-2 {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -154,16 +205,22 @@ function langLabel(code: string): string {
   -webkit-line-clamp: 1;
 }
 
-.clamp-4 {
-  -webkit-line-clamp: 4;
+.clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.expand-btn {
+  margin-left: auto;
+  flex: none;
+  padding-left: 8px;
+  font-size: 12px;
 }
 
 .hist-actions {
-  flex: none;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
-  padding-top: 1px;
 }
 
 .hist-actions :deep(.n-button) {
