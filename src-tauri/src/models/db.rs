@@ -37,6 +37,13 @@ pub struct DbSchema {
     pub tables: Vec<DbTable>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DbDatabase {
+    pub name: String,
+    pub table_count: usize,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DbSessionInfo {
@@ -44,6 +51,20 @@ pub struct DbSessionInfo {
     pub kind: String,
     pub label: String,
     pub schema: DbSchema,
+    /// MySQL 可切换的数据库；其它类型为空。
+    pub databases: Vec<DbDatabase>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DbHistoryEntryView {
+    pub id: String,
+    pub kind: String,
+    /// 自定义记录名称，默认为脱敏连接目标。
+    pub name: String,
+    /// 脱敏后的连接目标，不含密码。
+    pub label: String,
+    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

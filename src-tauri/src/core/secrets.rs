@@ -12,6 +12,7 @@ use crate::core::{config, persist};
 use crate::models::AppConfig;
 
 mod codec;
+mod db_history;
 #[cfg(test)]
 mod tests;
 
@@ -28,6 +29,8 @@ const EXPIRING_DAYS: i64 = 7;
 pub struct SecretEntry {
     pub id: String,
     pub name: String,
+    /// 脱敏后的连接目标，数据库历史专用；普通凭据为空。
+    pub label: String,
     pub service: String,
     pub secret: String,
     pub note: String,
@@ -178,7 +181,9 @@ impl SecretStore {
         let mut views: Vec<SecretEntryView> = secrets
             .entries
             .iter()
-            .filter(|entry| !entry.secret.trim().is_empty())
+            .filter(|entry| {
+                !entry.secret.trim().is_empty() && !db_history::is_db_entry(entry)
+            })
             .map(|entry| {
                 let (expired, days_left) = expiry(&entry.expires_on);
                 SecretEntryView {
@@ -239,6 +244,7 @@ impl SecretStore {
                 secrets.entries.push(SecretEntry {
                     id: new_id,
                     name,
+                    label: String::new(),
                     service,
                     secret,
                     note,
@@ -420,6 +426,7 @@ fn set_builtin(secrets: &mut Secrets, id: &str, value: Option<&str>) {
             secrets.entries.push(SecretEntry {
                 id: id.to_string(),
                 name: name.to_string(),
+                label: String::new(),
                 service: service.to_string(),
                 secret: value.to_string(),
                 note: String::new(),

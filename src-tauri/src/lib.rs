@@ -155,8 +155,12 @@ pub fn run() {
             commands::ai::llm_usage,
             commands::db::db_open,
             commands::db::db_schema,
+            commands::db::db_select_database,
             commands::db::db_query,
             commands::db::db_close,
+            commands::db::db_history_list,
+            commands::db::db_history_reveal,
+            commands::db::db_history_rename,
             commands::db::db_pick_sqlite
         ])
         .run(tauri::generate_context!())

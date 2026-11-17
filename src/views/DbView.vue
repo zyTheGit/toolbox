@@ -32,15 +32,17 @@
           v-else
           v-model:value="mysqlUrl"
           size="small"
-          placeholder="mysql://user:pass@host:3306/dbname"
+          placeholder="mysql://user:pass@host:3306（库名可省略）"
           class="grow"
         />
         <n-button type="primary" size="small" :loading="connecting" @click="connect">连接</n-button>
         <n-button v-if="session" size="small" @click="disconnect">断开</n-button>
+        <DbConnectionHistory ref="historyRef" @fill="fillFromHistory" @error="error = $event" />
       </div>
       <div class="conn-hint">
-        连接固定为只读；PostgreSQL / MySQL 语句超时 15 秒，请使用有查询权限的账号。MySQL
-        需要 TLS 时在地址后加 ?require_ssl=true。
+        连接固定为只读，PostgreSQL / MySQL 语句超时 15 秒，请使用有查询权限的账号。MySQL
+        可省略连接串末尾的库名，连接后默认打开第一个库并可在右上角切换；需要 TLS 时在地址后加
+        ?require_ssl=true。
       </div>
     </div>
 
@@ -48,16 +50,34 @@
       {{ error }}
     </n-alert>
 
-    <div v-if="session" class="db-layout">
-      <DbSchemaPanel :tables="session.schema.tables" :active="activeTable" @select="useTable" />
+    <div v-if="session" class="db-layout" :style="{ '--schema-width': `${schemaWidth}px` }">
+      <DbSchemaPanel
+        :tables="session.schema.tables"
+        :active="activeTable"
+        :empty-hint="schemaEmptyHint"
+        @select="useTable"
+      />
+      <div
+        class="db-resizer"
+        :class="{ dragging }"
+        title="拖动调整结构面板宽度"
+        @pointerdown="startResize"
+      ></div>
       <div class="db-main">
         <div class="card editor-card">
           <div class="editor-head">
-            <span class="session-label">
+            <span class="session-label" :title="session.label">
               {{ session.label }}
               <span class="badge">{{ kindLabel(session.kind) }}</span>
             </span>
             <div class="editor-actions">
+              <DbDatabaseSelect
+                v-if="session.databases.length > 1"
+                :databases="session.databases"
+                :value="selectedDatabase"
+                :loading="switching"
+                @update:value="switchDatabase"
+              />
               <n-select v-model:value="limit" size="tiny" :options="limitOptions" class="limit-select" />
               <n-button type="primary" size="small" :loading="running" @click="run(0)">
                 执行 Ctrl+Enter
@@ -81,11 +101,14 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { NAlert, NButton, NInput, NRadioButton, NRadioGroup, NSelect } from "naive-ui";
 import PageHead from "../components/PageHead.vue";
+import DbConnectionHistory from "../components/db/DbConnectionHistory.vue";
+import DbDatabaseSelect from "../components/db/DbDatabaseSelect.vue";
 import DbSchemaPanel from "../components/db/DbSchemaPanel.vue";
 import DbResultTable from "../components/db/DbResultTable.vue";
+import { useSchemaWidth } from "../composables/useSchemaWidth";
 import { api } from "../api";
 import type { DbKind, DbQueryResult, DbSessionInfo, DbTable } from "../types";
 
@@ -102,10 +125,21 @@ const running = ref(false);
 const result = ref<DbQueryResult | null>(null);
 const error = ref("");
 
+const { schemaWidth, dragging, startResize } = useSchemaWidth();
+const historyRef = ref<{ refresh: () => Promise<void> } | null>(null);
+const selectedDatabase = ref("");
+const switching = ref(false);
+
 const limitOptions = [50, 100, 200, 500].map((value) => ({
   label: `${value} 行`,
   value,
 }));
+
+const schemaEmptyHint = computed(() => {
+  const current = session.value;
+  if (!current || current.schema.tables.length > 0) return "";
+  return current.kind === "mysql" && current.databases.length > 1 ? "请先在上方选择数据库" : "";
+});
 
 async function pickSqlite(): Promise<void> {
   try {
@@ -133,8 +167,10 @@ async function connect(): Promise<void> {
       connectionString,
     });
     session.value = info;
+    selectedDatabase.value = info.databases.some((db) => db.name === info.label) ? info.label : "";
     result.value = null;
     activeTable.value = "";
+    void historyRef.value?.refresh();
     const first = info.schema.tables[0];
     if (first) useTable(first);
   } catch (e) {
@@ -144,10 +180,39 @@ async function connect(): Promise<void> {
   }
 }
 
+async function switchDatabase(database: string): Promise<void> {
+  const current = session.value;
+  if (!current || !database || switching.value) return;
+  switching.value = true;
+  error.value = "";
+  try {
+    const info = await api.dbSelectDatabase(current.id, database);
+    session.value = info;
+    selectedDatabase.value = database;
+    result.value = null;
+    activeTable.value = "";
+    const first = info.schema.tables[0];
+    if (first) useTable(first);
+  } catch (e) {
+    selectedDatabase.value = current.databases.some((db) => db.name === current.label) ? current.label : "";
+    error.value = String(e);
+  } finally {
+    switching.value = false;
+  }
+}
+
+function fillFromHistory(nextKind: DbKind, connection: string): void {
+  kind.value = nextKind;
+  if (nextKind === "sqlite") sqlitePath.value = connection;
+  else if (nextKind === "postgres") postgresUrl.value = connection;
+  else mysqlUrl.value = connection;
+}
+
 async function disconnect(): Promise<void> {
   const current = session.value;
   if (!current) return;
   session.value = null;
+  selectedDatabase.value = "";
   result.value = null;
   activeTable.value = "";
   try {
@@ -231,9 +296,31 @@ onBeforeUnmount(() => {
 }
 .db-layout {
   display: grid;
-  grid-template-columns: 268px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: var(--schema-width, 268px) 16px minmax(0, 1fr);
+  row-gap: 16px;
   align-items: start;
+}
+.db-resizer {
+  position: relative;
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+}
+.db-resizer::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #e3e7ef;
+  transition: background 0.15s ease;
+}
+.db-resizer:hover::before,
+.db-resizer.dragging::before {
+  background: #b9c4da;
 }
 .db-layout .card {
   margin-top: 0;
@@ -291,6 +378,9 @@ onBeforeUnmount(() => {
 @media (max-width: 1000px) {
   .db-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .db-resizer {
+    display: none;
   }
 }
 </style>

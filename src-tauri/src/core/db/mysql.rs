@@ -5,12 +5,13 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use mysql_async::prelude::Queryable;
-use mysql_async::{Conn, Opts, Row, Value};
+use mysql_async::{params, Conn, Opts, Row, Value};
+use parking_lot::RwLock;
 use serde_json::{json, Value as JsonValue};
 use tokio::sync::Mutex;
 
 use super::sql;
-use crate::models::{DbColumn, DbQueryResult, DbSchema, DbTable};
+use crate::models::{DbColumn, DbDatabase, DbQueryResult, DbSchema, DbTable};
 
 const READ_ONLY_KEYWORDS: [&str; 7] = [
     "select", "with", "values", "show", "describe", "desc", "explain",
@@ -18,8 +19,9 @@ const READ_ONLY_KEYWORDS: [&str; 7] = [
 
 #[derive(Clone)]
 pub struct MysqlSession {
-    label: String,
-    schema: DbSchema,
+    label: Arc<RwLock<String>>,
+    schema: Arc<RwLock<DbSchema>>,
+    databases: Vec<DbDatabase>,
     conn: Arc<Mutex<Conn>>,
 }
 
@@ -31,11 +33,10 @@ impl MysqlSession {
         }
         let opts = Opts::from_url(trimmed)
             .map_err(|e| format!("[PARAM] MySQL 连接串无效: {e}"))?;
-        let label = opts
+        let explicit_db = opts
             .db_name()
             .filter(|name| !name.is_empty())
-            .unwrap_or("mysql")
-            .to_string();
+            .map(str::to_string);
 
         let mut conn = Conn::new(opts)
             .await
@@ -55,10 +56,30 @@ impl MysqlSession {
             return Err("[DB] 初始化 MySQL 语句超时失败，请确认服务器支持超时设置".into());
         }
 
-        let schema = load_schema(&mut conn).await?;
+        let mut databases = list_databases(&mut conn).await?;
+        if let Some(name) = &explicit_db {
+            if !databases.iter().any(|db| db.name == *name) {
+                databases.push(DbDatabase {
+                    name: name.clone(),
+                    table_count: 0,
+                });
+                databases.sort_by(|a, b| a.name.cmp(&b.name));
+            }
+        } else if databases.is_empty() {
+            return Err("[DB] 未找到可浏览的数据库，请在连接串末尾指定库名".into());
+        }
+        // 未指定库名时默认打开第一个库，避免左侧结构为空
+        let selected = explicit_db.unwrap_or_else(|| databases[0].name.clone());
+        use_database(&mut conn, &selected).await?;
+        let schema = load_schema(&mut conn, &selected).await?;
+        let label = selected;
+        if let Some(item) = databases.iter_mut().find(|db| db.name == label) {
+            item.table_count = schema.tables.len();
+        }
         Ok(Self {
-            label,
-            schema,
+            label: Arc::new(RwLock::new(label)),
+            schema: Arc::new(RwLock::new(schema)),
+            databases,
             conn: Arc::new(Mutex::new(conn)),
         })
     }
@@ -67,12 +88,29 @@ impl MysqlSession {
         "mysql"
     }
 
-    pub fn label(&self) -> &str {
-        &self.label
+    pub fn label(&self) -> String {
+        self.label.read().clone()
     }
 
-    pub fn schema(&self) -> &DbSchema {
-        &self.schema
+    pub fn schema(&self) -> DbSchema {
+        self.schema.read().clone()
+    }
+
+    pub fn databases(&self) -> Vec<DbDatabase> {
+        self.databases.clone()
+    }
+
+    pub async fn select_database(&self, database: &str) -> Result<DbSchema, String> {
+        let database = database.trim();
+        if !self.databases.iter().any(|item| item.name == database) {
+            return Err("[PARAM] 数据库不存在或不可见".into());
+        }
+        let mut conn = self.conn.lock().await;
+        use_database(&mut conn, database).await?;
+        let schema = load_schema(&mut conn, database).await?;
+        *self.schema.write() = schema.clone();
+        *self.label.write() = database.to_string();
+        Ok(schema)
     }
 
     pub async fn query(
@@ -145,35 +183,75 @@ impl MysqlSession {
     }
 }
 
-async fn load_schema(conn: &mut Conn) -> Result<DbSchema, String> {
-    let tables = conn
+async fn list_databases(conn: &mut Conn) -> Result<Vec<DbDatabase>, String> {
+    let rows = conn
         .query::<Row, _>(
+            "SELECT s.schema_name, COUNT(t.table_name) AS table_count \
+             FROM information_schema.schemata s \
+             LEFT JOIN information_schema.tables t \
+               ON t.table_schema = s.schema_name AND t.table_type IN ('BASE TABLE','VIEW') \
+             WHERE s.schema_name NOT IN ('information_schema','mysql','performance_schema','sys') \
+             GROUP BY s.schema_name ORDER BY s.schema_name",
+        )
+        .await
+        .map_err(|e| format!("[DB] 读取数据库列表失败: {e}"))?;
+    Ok(rows
+        .iter()
+        .map(|row| DbDatabase {
+            name: text(row, 0),
+            table_count: count(row, 1),
+        })
+        .collect())
+}
+
+fn count(row: &Row, index: usize) -> usize {
+    match row.as_ref(index) {
+        Some(Value::UInt(value)) => *value as usize,
+        Some(Value::Int(value)) => (*value).max(0) as usize,
+        Some(Value::Bytes(bytes)) => std::str::from_utf8(bytes)
+            .ok()
+            .and_then(|text| text.parse().ok())
+            .unwrap_or(0), // 某些代理把 COUNT 返回为文本
+        _ => 0,
+    }
+}
+
+async fn use_database(conn: &mut Conn, database: &str) -> Result<(), String> {
+    let sql = format!("USE `{}`", database.replace('`', "``"));
+    conn.query_drop(sql).await.map_err(|e| format!("[DB] 切换数据库 {database} 失败: {e}"))
+}
+
+// MySQL 的 schema 就是数据库，只加载当前选中的库，避免把服务器上所有库混在一起
+async fn load_schema(conn: &mut Conn, db_name: &str) -> Result<DbSchema, String> {
+    let tables = conn
+        .exec::<Row, _, _>(
             "SELECT table_schema, table_name, table_type FROM information_schema.tables \
-             WHERE table_schema NOT IN ('mysql','information_schema','performance_schema','sys') \
-             AND table_type IN ('BASE TABLE','VIEW') ORDER BY table_schema, table_name",
+             WHERE table_schema = :schema AND table_type IN ('BASE TABLE','VIEW') \
+             ORDER BY table_name",
+            params! { "schema" => db_name },
         )
         .await
         .map_err(|e| format!("[DB] 读取表列表失败: {e}"))?;
     let columns = conn
-        .query::<Row, _>(
+        .exec::<Row, _, _>(
             "SELECT table_schema, table_name, column_name, column_type, is_nullable \
              FROM information_schema.columns \
-             WHERE table_schema NOT IN ('mysql','information_schema','performance_schema','sys') \
-             ORDER BY table_schema, table_name, ordinal_position",
+             WHERE table_schema = :schema \
+             ORDER BY table_name, ordinal_position",
+            params! { "schema" => db_name },
         )
         .await
         .map_err(|e| format!("[DB] 读取列信息失败: {e}"))?;
     let pks = conn
-        .query::<Row, _>(
+        .exec::<Row, _, _>(
             "SELECT tc.table_schema, tc.table_name, kcu.column_name \
              FROM information_schema.table_constraints tc \
              JOIN information_schema.key_column_usage kcu \
                ON kcu.constraint_schema = tc.constraint_schema \
               AND kcu.constraint_name = tc.constraint_name \
               AND kcu.table_name = tc.table_name \
-             WHERE tc.constraint_type = 'PRIMARY KEY' \
-             AND tc.table_schema NOT IN \
-                 ('mysql','information_schema','performance_schema','sys')",
+             WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = :schema",
+            params! { "schema" => db_name },
         )
         .await
         .map_err(|e| format!("[DB] 读取主键信息失败: {e}"))?;

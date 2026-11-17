@@ -5,6 +5,7 @@ import type {
   AppSnapshot,
   AutostartStatus,
   ConfigResult,
+  DbHistoryEntry,
   DbOpenInput,
   DbQueryResult,
   DbSchema,
@@ -71,9 +72,15 @@ export const api = {
   llmUsage: (days = 7) => invoke<LlmUsageSummary>("llm_usage", { days }),
   dbOpen: (input: DbOpenInput) => invoke<DbSessionInfo>("db_open", { input }),
   dbSchema: (id: string) => invoke<DbSchema>("db_schema", { id }),
+  dbSelectDatabase: (id: string, database: string) =>
+    invoke<DbSessionInfo>("db_select_database", { id, database }),
   dbQuery: (id: string, sql: string, offset: number, limit: number) =>
     invoke<DbQueryResult>("db_query", { id, sql, offset, limit }),
   dbClose: (id: string) => invoke<void>("db_close", { id }),
+  dbHistoryList: () => invoke<DbHistoryEntry[]>("db_history_list"),
+  dbHistoryReveal: (id: string) => invoke<string>("db_history_reveal", { id }),
+  dbHistoryRename: (id: string, name: string) =>
+    invoke<DbHistoryEntry[]>("db_history_rename", { id, name }),
   dbPickSqlite: () => invoke<string | null>("db_pick_sqlite"),
 };
 

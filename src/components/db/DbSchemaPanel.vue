@@ -2,23 +2,33 @@
   <div class="schema-card">
     <div class="schema-head">
       <span class="title">结构</span>
-      <span class="count">{{ tables.length }} 个对象</span>
+      <span class="count">{{ countText }}</span>
     </div>
-    <n-empty v-if="!tables.length" size="small" description="没有可浏览的表" />
+    <n-input
+      v-model:value="keyword"
+      class="schema-search"
+      size="small"
+      clearable
+      placeholder="搜索表 / 字段"
+    />
+    <n-empty v-if="!filteredTables.length" size="small" :description="emptyText" />
     <div v-else class="schema-list">
-      <div v-for="table in tables" :key="table.name" class="table-block">
+      <div v-for="table in filteredTables" :key="table.name" class="table-block">
         <div
           class="table-item"
           :class="{ active: table.name === active }"
           @click="emit('select', table)"
         >
-          <span class="chev" @click.stop="toggle(table.name)">{{ expanded[table.name] ? "▾" : "▸" }}</span>
+          <span v-if="expandAll" class="chev placeholder"></span>
+          <span v-else class="chev" @click.stop="toggle(table.name)">
+            {{ expanded[table.name] ? "▾" : "▸" }}
+          </span>
           <span class="kind" :class="table.kind">{{ table.kind === "view" ? "V" : "T" }}</span>
           <span class="name" :title="table.name">{{ table.name }}</span>
           <span class="count">{{ table.columns.length }}</span>
         </div>
-        <div v-if="expanded[table.name]" class="cols">
-          <div v-for="col in table.columns" :key="col.name" class="col">
+        <div v-if="expandAll || expanded[table.name]" class="cols">
+          <div v-for="col in columnsOf(table)" :key="col.name" class="col">
             <span class="col-name" :title="col.name">{{ col.name }}</span>
             <span class="col-type">{{ col.dataType }}</span>
             <span v-if="col.primaryKey" class="pk">PK</span>
@@ -30,13 +40,14 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from "vue";
-import { NEmpty } from "naive-ui";
+import { computed, reactive, ref } from "vue";
+import { NEmpty, NInput } from "naive-ui";
 import type { DbTable } from "../../types";
 
-defineProps<{
+const props = defineProps<{
   tables: DbTable[];
   active: string;
+  emptyHint?: string;
 }>();
 
 const emit = defineEmits<{
@@ -44,6 +55,38 @@ const emit = defineEmits<{
 }>();
 
 const expanded = reactive<Record<string, boolean>>({});
+const keyword = ref("");
+const query = computed(() => keyword.value.trim().toLowerCase());
+const searching = computed(() => query.value.length > 0);
+
+const filteredTables = computed(() => {
+  if (!query.value) return props.tables;
+  return props.tables.filter(
+    (table) => matches(table.name) || table.columns.some((col) => matches(col.name)),
+  );
+});
+
+const countText = computed(() =>
+  searching.value
+    ? `${filteredTables.value.length} / ${props.tables.length} 个对象`
+    : `${props.tables.length} 个对象`,
+);
+
+const emptyText = computed(() =>
+  searching.value ? "没有匹配的表或字段" : props.emptyHint || "没有可浏览的表",
+);
+
+// 搜索结果过多时全部展开会生成成千上万个节点，此时保持折叠由用户按需展开
+const expandAll = computed(() => searching.value && filteredTables.value.length <= 30);
+
+function matches(text: string): boolean {
+  return text.toLowerCase().includes(query.value);
+}
+
+function columnsOf(table: DbTable): DbTable["columns"] {
+  if (!searching.value || matches(table.name)) return table.columns;
+  return table.columns.filter((col) => matches(col.name));
+}
 
 function toggle(name: string): void {
   expanded[name] = !expanded[name];
@@ -72,8 +115,11 @@ function toggle(name: string): void {
   font-size: 12px;
   color: var(--muted);
 }
+.schema-search {
+  margin-bottom: 8px;
+}
 .schema-list {
-  max-height: calc(100vh - 320px);
+  max-height: calc(100vh - 360px);
   overflow: auto;
   padding-right: 4px;
 }

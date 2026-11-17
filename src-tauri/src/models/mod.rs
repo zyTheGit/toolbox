@@ -13,7 +13,10 @@ pub use config::{
     QuickTranslateConfig, SecurityConfig, StartupConfig, ToolPaths, TranslateConfig,
     YoudaoConfig, CONFIG_SCHEMA_VERSION,
 };
-pub use db::{DbColumn, DbOpenInput, DbQueryResult, DbSchema, DbSessionInfo, DbTable};
+pub use db::{
+    DbColumn, DbDatabase, DbHistoryEntryView, DbOpenInput, DbQueryResult, DbSchema, DbSessionInfo,
+    DbTable,
+};
 pub use download::{
     DownloadRequest, Job, JobProgress, ToolInstallResult, ToolProgress, ToolStatus, ToolsStatus,
 };

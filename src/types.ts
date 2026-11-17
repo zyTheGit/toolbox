@@ -212,11 +212,28 @@ export interface DbOpenInput {
   connectionString?: string | null;
 }
 
+export interface DbDatabase {
+  name: string;
+  tableCount: number;
+}
+
 export interface DbSessionInfo {
   id: string;
   kind: DbKind;
   label: string;
   schema: DbSchema;
+  /** MySQL 可切换的数据库；其它类型为空。 */
+  databases: DbDatabase[];
+}
+
+export interface DbHistoryEntry {
+  id: string;
+  kind: DbKind;
+  /** 自定义记录名称，默认为脱敏连接目标。 */
+  name: string;
+  /** 脱敏后的连接目标，不含密码。 */
+  label: string;
+  updatedAt: string;
 }
 
 export interface DbQueryResult {
