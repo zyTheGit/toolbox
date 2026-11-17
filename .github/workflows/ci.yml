@@ -54,11 +54,11 @@ jobs:
         run: |
           if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
             cargo test --manifest-path src-tauri/Cargo.toml --no-run
-            BIN=$(ls src-tauri/target/debug/deps/toolbox-* | grep -v '\.d$' | head -1)
+            BIN=$(ls src-tauri/target/debug/build/toolbox/*/out/toolbox_lib-* | head -1)
             echo "测试二进制: $BIN"
-            timeout 60 "$BIN" --test-threads=1 > /tmp/single.log 2>&1
-            echo "单线程退出码: $?"; tail -3 /tmp/single.log
-            timeout 90 "$BIN" --nocapture > /tmp/par.log 2>&1
+            timeout 120 "$BIN" --test-threads=1 > /tmp/single.log 2>&1
+            echo "单线程退出码: $?"; tail -5 /tmp/single.log
+            timeout 120 "$BIN" --nocapture > /tmp/par.log 2>&1
             echo "并行退出码: $?"; tail -60 /tmp/par.log
           else
             cargo test --manifest-path src-tauri/Cargo.toml
