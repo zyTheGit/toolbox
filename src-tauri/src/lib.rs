@@ -80,6 +80,7 @@ pub fn run() {
                 config: shared,
                 secrets: Arc::new(secrets),
                 llm_usage: Arc::new(llm_usage),
+                db: Arc::new(core::db::DbManager::new()),
                 warnings,
                 history,
                 downloader,
@@ -152,6 +153,11 @@ pub fn run() {
             commands::secrets::secret_reveal,
             commands::ai::llm_run,
             commands::ai::llm_usage,
+            commands::db::db_open,
+            commands::db::db_schema,
+            commands::db::db_query,
+            commands::db::db_close,
+            commands::db::db_pick_sqlite
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -186,6 +186,48 @@ export interface SecretEntryInput {
   expiresOn: string;
 }
 
+export type DbKind = "sqlite" | "postgres" | "mysql";
+
+export interface DbColumn {
+  name: string;
+  dataType: string;
+  nullable: boolean;
+  primaryKey: boolean;
+}
+
+export interface DbTable {
+  name: string;
+  schema: string;
+  kind: "table" | "view";
+  columns: DbColumn[];
+}
+
+export interface DbSchema {
+  tables: DbTable[];
+}
+
+export interface DbOpenInput {
+  kind: DbKind;
+  sqlitePath?: string | null;
+  connectionString?: string | null;
+}
+
+export interface DbSessionInfo {
+  id: string;
+  kind: DbKind;
+  label: string;
+  schema: DbSchema;
+}
+
+export interface DbQueryResult {
+  columns: string[];
+  rows: Array<Array<string | number | boolean | null>>;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+  elapsedMs: number;
+}
+
 export interface AppConfig {
   schemaVersion: number;
   downloadDir: string;

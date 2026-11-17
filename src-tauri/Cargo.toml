@@ -42,6 +42,13 @@ sha2 = "0.10"
 croner = "4"
 percent-encoding = "2"
 parking_lot = "0.12"
+rusqlite = { version = "0.32", features = ["bundled"] }
+mysql_async = { version = "0.37", default-features = false, features = ["default-rustls-ring"] }
+tokio-postgres = "0.7"
+tokio-postgres-rustls = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
+webpki-roots = "1"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

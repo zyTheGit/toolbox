@@ -5,6 +5,10 @@ import type {
   AppSnapshot,
   AutostartStatus,
   ConfigResult,
+  DbOpenInput,
+  DbQueryResult,
+  DbSchema,
+  DbSessionInfo,
   DownloadRequest,
   HistoryPage,
   HistoryQuery,
@@ -65,6 +69,12 @@ export const api = {
   secretReveal: (id: string) => invoke<string>("secret_reveal", { id }),
   llmRun: (request: LlmRequest) => invoke<LlmResponse[]>("llm_run", { request }),
   llmUsage: (days = 7) => invoke<LlmUsageSummary>("llm_usage", { days }),
+  dbOpen: (input: DbOpenInput) => invoke<DbSessionInfo>("db_open", { input }),
+  dbSchema: (id: string) => invoke<DbSchema>("db_schema", { id }),
+  dbQuery: (id: string, sql: string, offset: number, limit: number) =>
+    invoke<DbQueryResult>("db_query", { id, sql, offset, limit }),
+  dbClose: (id: string) => invoke<void>("db_close", { id }),
+  dbPickSqlite: () => invoke<string | null>("db_pick_sqlite"),
 };
 
 export const events = {

@@ -106,10 +106,11 @@ const TranslateView = defineAsyncComponent(() => import("./views/TranslateView.v
 const DownloadView = defineAsyncComponent(() => import("./views/DownloadView.vue"));
 const TasksView = defineAsyncComponent(() => import("./views/TasksView.vue"));
 const DevView = defineAsyncComponent(() => import("./views/DevView.vue"));
+const DbView = defineAsyncComponent(() => import("./views/DbView.vue"));
 const AiView = defineAsyncComponent(() => import("./views/AiView.vue"));
 const SettingsView = defineAsyncComponent(() => import("./views/SettingsView.vue"));
 
-type PageKey = "translate" | "download" | "tasks" | "dev" | "ai" | "settings";
+type PageKey = "translate" | "download" | "tasks" | "dev" | "db" | "ai" | "settings";
 
 const page = ref<PageKey>("translate");
 
@@ -119,6 +120,7 @@ const views = {
   download: DownloadView,
   tasks: TasksView,
   dev: DevView,
+  db: DbView,
   ai: AiView,
   settings: SettingsView,
 };
@@ -143,6 +145,11 @@ const navItems: Array<{ key: PageKey; label: string; icon: string }> = [
     key: "dev",
     label: "开发工具",
     icon: '<svg viewBox="0 0 24 24"><path d="M8 6l-5 6 5 6"/><path d="M16 6l5 6-5 6"/><path d="M13.5 4l-3 16"/></svg>',
+  },
+  {
+    key: "db",
+    label: "数据库",
+    icon: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
   },
   {
     key: "ai",
@@ -199,6 +206,7 @@ function isPage(value: string): value is PageKey {
     value === "download" ||
     value === "tasks" ||
     value === "dev" ||
+    value === "db" ||
     value === "ai" ||
     value === "settings"
   );

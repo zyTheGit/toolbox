@@ -1,5 +1,6 @@
 pub mod backup;
 pub mod config;
+pub mod db;
 pub mod downloader;
 pub mod history;
 pub mod llm;

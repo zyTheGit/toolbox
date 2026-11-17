@@ -5,6 +5,7 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock};
 use tauri::{AppHandle, Manager};
 
+use crate::core::db::DbManager;
 use crate::core::downloader::Downloader;
 use crate::core::history::HistoryStore;
 use crate::core::llm::LlmUsageStore;
@@ -75,6 +76,7 @@ pub struct AppState {
     pub config: SharedConfig,
     pub secrets: Arc<SecretStore>,
     pub llm_usage: Arc<LlmUsageStore>,
+    pub db: Arc<DbManager>,
     pub warnings: Warnings,
     pub history: Arc<HistoryStore>,
     pub downloader: Arc<Downloader>,
