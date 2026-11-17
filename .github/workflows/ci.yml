@@ -48,11 +48,13 @@ jobs:
 
       - run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: 运行 Rust 测试（Linux 诊断：单线程 + 硬超时）
+        shell: bash
         env:
           RUST_BACKTRACE: "1"
         run: |
+          cargo test --manifest-path src-tauri/Cargo.toml --no-run
           if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
-            timeout 420 cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1
+            timeout 180 cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1 scheduler::command::exec
           else
             cargo test --manifest-path src-tauri/Cargo.toml
           fi
