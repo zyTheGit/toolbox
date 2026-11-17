@@ -13,7 +13,7 @@
         />
       </div>
 
-      <div v-if="!supported" class="hint">仅 Windows 支持开机自启。</div>
+      <div v-if="!supported" class="hint">当前平台不支持开机自启。</div>
 
       <n-alert v-if="mismatch" type="warning" :bordered="false">
         <div>启动项路径与当前程序不一致，可能移动过程序。</div>
