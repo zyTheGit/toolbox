@@ -46,6 +46,9 @@ pub fn run() {
             if let Err(err) = secrets.migrate_inline(&mut config) {
                 state::push_warning(&warnings, format!("迁移旧密钥失败: {err}"));
             }
+            for message in secrets.expiring_warnings() {
+                state::push_warning(&warnings, message);
+            }
 
             let shared: SharedConfig = Arc::new(RwLock::new(config.clone()));
             let (history, history_warning) =
@@ -136,7 +139,11 @@ pub fn run() {
             commands::autostart_set,
             commands::get_data_dir,
             commands::data_export,
-            commands::data_import
+            commands::data_import,
+            commands::secrets::secrets_list,
+            commands::secrets::secret_save,
+            commands::secrets::secret_delete,
+            commands::secrets::secret_reveal
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
