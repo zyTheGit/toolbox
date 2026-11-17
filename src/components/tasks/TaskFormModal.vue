@@ -119,35 +119,50 @@
           </div>
 
           <template v-if="repeatMode === 'custom'">
-            <div class="hint">cron 表达式（分 时 日 月 周）</div>
-            <div class="cron-row">
-              <n-input
-                v-model:value="form.cron"
-                class="cron-input mono"
-                placeholder="0 17 * * *"
-                spellcheck="false"
-              />
-              <n-select
-                class="cron-preset"
-                :value="presetValue"
-                :options="presetOptions"
-                placeholder="常用…"
-                clearable
-                @update:value="applyPreset"
-              />
+            <div class="hint cron-format">
+              格式：<span class="mono">分 时 日 月 周</span>，共 5 段、用空格分隔。例如
+              <span class="mono">30 8 * * 1</span> 表示每周一 08:30。
+            </div>
+            <n-input
+              v-model:value="form.cron"
+              class="cron-input mono"
+              placeholder="0 17 * * *"
+              spellcheck="false"
+            />
+            <div class="cron-presets">
+              <button
+                v-for="item in CRON_PRESETS"
+                :key="item.value"
+                type="button"
+                class="cron-chip"
+                :class="{ active: form.cron.trim() === item.value }"
+                @click="form.cron = item.value"
+              >
+                {{ item.label }}
+                <span class="mono cron-chip-expr">{{ item.value }}</span>
+              </button>
+            </div>
+            <div class="hint cron-legend">
+              <span class="mono">*</span> 任意值 ·
+              <span class="mono">*/5</span> 每 5 个单位 ·
+              <span class="mono">1,3,5</span> 列举 ·
+              <span class="mono">1-5</span> 范围 ·
+              周：<span class="mono">0</span> 为周日
             </div>
           </template>
 
           <div class="cron-preview">
-            <div v-if="previewing" class="hint">正在计算下次运行…</div>
-            <template v-else-if="preview.length">
-              <div class="hint">{{ summary ? summary + " · " : "" }}按表达式持续重复</div>
-              <div class="hint">
+            <div v-if="previewing" class="hint">正在校验 cron 表达式…</div>
+            <div v-else-if="previewError" class="hint error-hint">{{ previewError }}</div>
+            <template v-else>
+              <div class="cron-meaning">
+                {{ summary ? `含义：${summary}` : "表达式有效，按 cron 规则重复" }}
+              </div>
+              <div v-if="preview.length" class="hint">
                 接下来：
                 <span class="mono">{{ preview.map((time) => formatDateTime(time).slice(5)).join(" · ") }}</span>
               </div>
             </template>
-            <div v-else-if="summary" class="hint">{{ summary }} · 按表达式持续重复</div>
           </div>
         </div>
       </n-form-item>
@@ -302,13 +317,8 @@ import type {
   TaskPayload,
   TaskType,
 } from "../../types";
-import {
-  CRON_PRESETS,
-  cronSummary,
-  emptyPayload,
-  errorText,
-  formatDateTime,
-} from "./task-utils";
+import { emptyPayload, errorText, formatDateTime } from "./task-utils";
+import { CRON_PRESETS, cronSummary, parseWeekdays } from "../../utils/cron";
 
 const props = defineProps<{
   show: boolean;
@@ -416,11 +426,6 @@ const shellOptions = computed(() =>
         { label: "PowerShell", value: "powershell" },
       ]
     : [{ label: "sh", value: "sh" }],
-);
-
-const presetOptions = CRON_PRESETS.map((item) => ({ label: item.label, value: item.value }));
-const presetValue = computed(
-  () => CRON_PRESETS.find((item) => item.value === form.value.cron.trim())?.value ?? null,
 );
 
 const timeoutValue = computed<number | null>(() =>
@@ -579,11 +584,9 @@ function parseCron(expr: string): ParsedCron | null {
 
   if (dom === "*" && dow === "*") return { mode: "daily", hour: h, minute };
 
-  if (dom === "*" && /^\d+(,\d+)*$/.test(dow)) {
-    const raw = dow.split(",").map(Number);
-    if (raw.some((day) => day < 0 || day > 7)) return null;
-    const days = [...new Set(raw.map((day) => day % 7))].sort((a, b) => a - b);
-    return days.length ? { mode: "weekly", hour: h, minute, weekdays: days } : null;
+  if (dom === "*" && /^[0-9,-]+$/.test(dow)) {
+    const days = parseWeekdays(dow);
+    return days ? { mode: "weekly", hour: h, minute, weekdays: days } : null;
   }
 
   if (/^\d+$/.test(dom) && dow === "*") {
@@ -642,10 +645,6 @@ function onShellChange(value: string | number | null): void {
 
 function onTimeoutChange(value: number | null): void {
   form.value.payload.timeoutSeconds = value ?? 0;
-}
-
-function applyPreset(value: string | number | null): void {
-  if (typeof value === "string") form.value.cron = value;
 }
 
 function clearPreviewTimer(): void {
@@ -897,20 +896,53 @@ onBeforeUnmount(clearPreviewTimer);
   color: var(--warning);
 }
 
-.cron-row {
-  display: flex;
-  gap: 10px;
+.cron-input {
   width: 100%;
 }
 
-.cron-input {
-  flex: 1;
-  min-width: 0;
+.cron-format,
+.cron-legend {
+  width: 100%;
 }
 
-.cron-preset {
-  width: 160px;
-  flex: none;
+.cron-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.cron-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.cron-chip:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.cron-chip.active {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: rgba(79, 99, 231, 0.08);
+}
+
+.cron-chip-expr {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.cron-chip.active .cron-chip-expr {
+  color: inherit;
 }
 
 .cron-preview {
@@ -918,6 +950,11 @@ onBeforeUnmount(clearPreviewTimer);
   flex-direction: column;
   gap: 4px;
   width: 100%;
+}
+
+.cron-meaning {
+  font-size: 13px;
+  color: var(--text);
 }
 
 .command-hint {

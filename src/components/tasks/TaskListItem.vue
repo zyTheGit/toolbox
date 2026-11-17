@@ -75,7 +75,8 @@ import { computed } from "vue";
 import { NButton, NPopconfirm, NSwitch, NTag } from "naive-ui";
 import type { Task } from "../../types";
 import StatusPill from "../StatusPill.vue";
-import { TASK_TYPE_META, cronSummary, formatDateTime, truncate } from "./task-utils";
+import { TASK_TYPE_META, formatDateTime, truncate } from "./task-utils";
+import { cronSummary } from "../../utils/cron";
 
 const props = defineProps<{
   task: Task;
