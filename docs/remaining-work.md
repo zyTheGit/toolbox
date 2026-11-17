@@ -68,10 +68,12 @@
 
 拆分属纯结构调整，需独立提交、逐次 `npm run typecheck` 与 `npm run test` 验证。
 
-## 4. 前端体积告警回归
+## 4. 前端体积告警（已解决）
 
-- 引入开发工具组件后，`naive-ui` vendor chunk 增至 764 KB，超过 750 KB 告警阈值
-- 待办：改为按需引入 naive-ui 组件，或按组件分桶；确认后再决定是否调整阈值
+- 原因：所有视图用 `v-show` 常驻挂载，异步视图在启动时全部加载；`manualChunks` 又把 naive-ui 全量打进单个 vendor chunk
+- 修复：视图改为 `<KeepAlive>` + 动态组件，首次进入才加载；naive-ui 组件跟随所在视图分包；date-fns / lodash / vue / naive-ui-core 独立分桶
+- 结果：最大 chunk 由 766 KB 降至 166 KB（TasksView），首屏 JS 约 934 KB → 约 526 KB，构建告警消失
+- 说明：naive-ui 的具名导入本身已按组件 tree-shaking，无需引入 `unplugin-vue-components`
 
 ## 5. 视频下载失败未定位
 

@@ -12,19 +12,26 @@ export default defineConfig({
     chunkSizeWarningLimit: 750,
     rollupOptions: {
       output: {
-        // UI 库单独分包：避免单 chunk 超限，且库代码变化少、缓存友好。
+        // 只固定稳定的底层依赖分组；naive-ui 组件跟随各自视图分包，
+        // 配合视图懒加载实现首次进入才加载对应组件，避免整库前置。
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
+          if (id.includes("date-fns")) return "date-fns";
+          if (id.includes("lodash-es") || id.includes("/lodash/")) return "lodash";
+          if (id.includes("/node_modules/vue/") || id.includes("/node_modules/@vue/")) {
+            return "vue";
+          }
           if (
-            id.includes("naive-ui") ||
             id.includes("vueuc") ||
             id.includes("css-render") ||
             id.includes("vdirs") ||
-            id.includes("vfonts") ||
-            id.includes("treemir") ||
+            id.includes("vooks") ||
+            id.includes("treemate") ||
+            id.includes("seemly") ||
+            id.includes("evtd") ||
             id.includes("async-validator")
           ) {
-            return "naive-ui";
+            return "naive-ui-core";
           }
           return undefined;
         },

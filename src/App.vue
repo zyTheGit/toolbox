@@ -75,11 +75,9 @@
                   </div>
                 </n-alert>
               </div>
-              <div v-show="page === 'translate'" class="view"><TranslateView /></div>
-              <div v-show="page === 'download'" class="view"><DownloadView /></div>
-              <div v-show="page === 'tasks'" class="view"><TasksView /></div>
-              <div v-show="page === 'dev'" class="view"><DevView /></div>
-              <div v-show="page === 'settings'" class="view"><SettingsView /></div>
+              <KeepAlive>
+                <component :is="views[page]" class="view" />
+              </KeepAlive>
             </template>
           </main>
         </div>
@@ -113,6 +111,15 @@ const SettingsView = defineAsyncComponent(() => import("./views/SettingsView.vue
 type PageKey = "translate" | "download" | "tasks" | "dev" | "settings";
 
 const page = ref<PageKey>("translate");
+
+// 视图按需加载并按页面缓存：首次进入才拉取该页代码及其 naive-ui 组件
+const views = {
+  translate: TranslateView,
+  download: DownloadView,
+  tasks: TasksView,
+  dev: DevView,
+  settings: SettingsView,
+};
 
 const navItems: Array<{ key: PageKey; label: string; icon: string }> = [
   {
@@ -226,8 +233,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .alert-wrap {
-  max-width: 1080px;
-  margin: 20px auto 0;
+  margin: 20px 0 0;
   padding: 0 32px;
 }
 
