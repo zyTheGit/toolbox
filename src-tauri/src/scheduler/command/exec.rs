@@ -40,6 +40,12 @@ where
 
     let mut child = match cmd.spawn() {
         Ok(child) => child,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return ExecOutcome::failed(format!(
+                "[TOOL] 启动命令失败: {err}。提示：未找到 {}，请确认已安装且其目录已加入 PATH",
+                spec.program
+            ));
+        }
         Err(err) => return ExecOutcome::failed(format!("[TOOL] 启动命令失败: {err}")),
     };
     let pid = child.id().unwrap_or(0);
@@ -167,11 +173,17 @@ where
                 } else {
                     format!("命令退出码 {code}（{shell}）: {tail}")
                 };
-                // cmd 下误用 PowerShell 语法（如行首 & 调用符）是最常见的失败原因，
-                // 附提示引导到任务的 Shell 选项，降低排错成本。
-                #[cfg(windows)]
-                if spec.program.eq_ignore_ascii_case("cmd") {
-                    error.push_str("。提示：cmd 不支持 PowerShell 语法（如 & 调用符），可在任务高级选项中切换 Shell");
+                if looks_like_not_found(&output) {
+                    error.push_str(
+                        "。提示：未找到该命令，请确认已安装且其目录已加入 PATH，或在任务中改用完整路径",
+                    );
+                } else {
+                    // cmd 下误用 PowerShell 语法（如行首 & 调用符）是最常见的失败原因，
+                    // 附提示引导到任务的 Shell 选项，降低排错成本。
+                    #[cfg(windows)]
+                    if spec.program.eq_ignore_ascii_case("cmd") {
+                        error.push_str("。提示：cmd 不支持 PowerShell 语法（如 & 调用符），可在任务高级选项中切换 Shell");
+                    }
                 }
                 ExecOutcome {
                     status: "failed",
@@ -228,6 +240,22 @@ fn last_line(lines: &VecDeque<String>) -> String {
             }
         })
         .unwrap_or_default()
+}
+
+/// 输出出现“命令不存在”特征时给出 PATH 排查提示。
+fn looks_like_not_found(lines: &[String]) -> bool {
+    const MARKERS: [&str; 5] = [
+        "不是内部或外部命令",
+        "is not recognized as an internal or external command",
+        "项识别为 cmdlet",
+        "is not recognized as the name of a cmdlet",
+        "commandnotfoundexception",
+    ];
+    lines.iter().any(|line| {
+        let lower = line.to_ascii_lowercase();
+        MARKERS.iter().any(|marker| lower.contains(marker))
+            || (lower.starts_with("sh: ") && lower.contains("not found"))
+    })
 }
 
 /// 展示用的 Shell 名称标签。
@@ -293,5 +321,17 @@ mod tests {
         let outcome = run_command(spec, Arc::new(AtomicBool::new(false)), |_| {}, |_| {}).await;
         assert_eq!(outcome.status, "failed");
         assert!(outcome.error.starts_with("[TIMEOUT]"));
+    }
+
+    #[test]
+    fn detects_missing_command_output() {
+        assert!(looks_like_not_found(&[
+            "'agy' 不是内部或外部命令，也不是可运行的程序".into()
+        ]));
+        assert!(looks_like_not_found(&[
+            "无法将“agy”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。".into()
+        ]));
+        assert!(looks_like_not_found(&["sh: 1: agy: not found".into()]));
+        assert!(!looks_like_not_found(&["error: build failed".into()]));
     }
 }

@@ -1,6 +1,7 @@
 //! 终端命令任务：规格构建、平台差异与进程控制。
 
 mod exec;
+mod path_env;
 mod vars;
 
 pub use exec::run_command;
@@ -57,7 +58,8 @@ pub fn build_spec(payload: &TaskPayload) -> Result<CommandSpec, String> {
     if command.is_empty() {
         return Err("[PARAM] 命令内容不能为空".into());
     }
-    let env = parse_env(&payload.env)?;
+    let mut env = parse_env(&payload.env)?;
+    ensure_path_env(&mut env);
     let work_dir = resolve_work_dir(&payload.work_dir)?;
     let (program, args) = shell_invocation(command, &payload.shell);
     let timeout_seconds = if payload.timeout_seconds == 0 {
@@ -89,6 +91,16 @@ fn shell_invocation(command: &str, shell: &str) -> (String, Vec<String>) {
 #[cfg(not(windows))]
 fn shell_invocation(command: &str, _shell: &str) -> (String, Vec<String>) {
     ("sh".into(), vec!["-c".into(), command.into()])
+}
+
+/// 任务显式配置了 PATH 时尊重用户设置，否则补全当前进程缺失的命令目录。
+fn ensure_path_env(env: &mut Vec<(String, String)>) {
+    if env.iter().any(|(key, _)| key.eq_ignore_ascii_case("PATH")) {
+        return;
+    }
+    if let Some(path) = path_env::merged_path() {
+        env.push(("PATH".into(), path));
+    }
 }
 
 pub fn resolve_work_dir(raw: &str) -> Result<PathBuf, String> {
