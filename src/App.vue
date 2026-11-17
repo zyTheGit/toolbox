@@ -149,7 +149,7 @@ const themeOverrides: GlobalThemeOverrides = {
     primaryColorPressed: "#3f51d1",
     primaryColorSuppl: "#6678f0",
     borderRadius: "8px",
-    fontFamily: '"Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+    fontFamily: "var(--font-sans)",
   },
 };
 

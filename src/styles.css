@@ -12,6 +12,11 @@
   --warning: #b7791f;
   --sidebar-bg: #fbfbfd;
   --radius: 12px;
+  /* 西文用 Inter，中文回退到各平台自带的黑体，避免中文被西文字形覆盖 */
+  --font-sans: "Inter Variable", "Inter", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC",
+    "Source Han Sans SC", "WenQuanYi Micro Hei", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
   color-scheme: light;
 }
 
@@ -27,10 +32,14 @@ body,
 }
 
 body {
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
+  /* 显式行高，避免中文回退字体与 Inter 的行盒高度不一致导致整段行距跳动 */
+  line-height: 1.6;
+  /* 按中文排版规则自动在中西文之间留出间距；旧版 WebView 会忽略该属性 */
+  text-autospace: normal;
   -webkit-font-smoothing: antialiased;
 }
 
