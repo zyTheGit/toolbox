@@ -49,12 +49,12 @@
 
 - 首个版本，无历史数据迁移问题；数据目录 `%APPDATA%\Toolbox`
 
-## 2. CI：Ubuntu 单测未通过
+## 2. CI：Ubuntu 单测（已修复）
 
-- run `44008967361`（提交 `7bdad85`）：frontend、rust (macOS)、rust (Windows) 通过；rust (ubuntu-22.04) 失败
-- Ubuntu job 中 `cargo check` 通过，`cargo test` 运行约 50 分钟后失败，步骤无结论，日志接口暂不可取
-- 初步判断：某个测试在 Linux 下挂起（涉及进程、文件锁或自启路径），而非编译错误
-- 待办：重跑该 job 取日志；若确认挂起，为相关测试加超时，并在 Linux 环境（WSL/容器）复现
+- run `44008967361`（提交 `7bdad85`）：frontend、rust (macOS)、rust (Windows) 通过；rust (ubuntu-22.04) 失败，`cargo test` 约 50 分钟后被整体杀掉，日志缺失
+- 根因：`kill_tree` 通过 `kill -9 -<pid>` 子进程清理进程组，procps 的 `kill` 对负 PID 参数解析不一致，信号实际打到了调用方自己所在的进程组（runner 的组），导致测试进程与 `timeout` 一起被 SIGKILL，而真正的目标 `sh`/`sleep` 存活为孤儿进程
+- 修复：改为直接调用 `kill(2)`（`src-tauri/src/core/proc.rs`），仅在目标确为进程组组长时按组发送；调度器与下载器共用该实现；命令执行在终止后增加兜底期限，回收失败也不会永久阻塞
+- 验证：run `44029486162` 四平台全绿，Ubuntu 63 个单测 0.86s 通过；新增 `core::proc::tests::kills_child_in_its_own_process_group` 防回归
 
 ## 3. 超过 400 行的文件
 
