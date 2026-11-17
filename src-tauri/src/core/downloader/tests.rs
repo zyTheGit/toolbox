@@ -95,10 +95,23 @@ fn splits_extra_args() {
 
 #[test]
 fn formats_quality() {
-    assert_eq!(format_for("best"), "bv*+ba/b");
-    assert_eq!(format_for("1080"), "bv*[height<=1080]+ba/b[height<=1080]");
-    assert_eq!(format_for("unknown"), "bv*+ba/b");
+    // 视频档位优先命中 MP4，站点不提供时回退任意最佳组合。
+    assert_eq!(format_for("best"), "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b");
+    assert_eq!(
+        format_for("1080"),
+        "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba/b[height<=1080]"
+    );
+    assert_eq!(format_for("unknown"), "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b");
     assert_eq!(format_for("audio"), "bestaudio/best");
+}
+
+#[test]
+fn extra_flags_match_quality() {
+    // 视频档位强制合并容器为 MP4。
+    assert_eq!(extra_flags_for("best"), &["--merge-output-format", "mp4"]);
+    assert_eq!(extra_flags_for("720"), &["--merge-output-format", "mp4"]);
+    // 音频档位提取并转码为 MP3。
+    assert_eq!(extra_flags_for("audio"), &["-x", "--audio-format", "mp3"]);
 }
 
 #[test]

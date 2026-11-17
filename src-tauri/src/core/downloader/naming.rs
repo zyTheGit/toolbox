@@ -13,13 +13,25 @@ pub(super) fn now_string() -> String {
     chrono::Local::now().format(TIME_FORMAT).to_string()
 }
 
+/// 画质档位对应的 yt-dlp 格式选择器（-f 值）。
+/// 视频档位优先命中 MP4（视频流 ext=mp4 + 音频流 ext=m4a），
+/// 站点不提供 MP4 时回退到任意格式的最佳组合。
 pub(super) fn format_for(quality: &str) -> &'static str {
     match quality {
-        "1080" => "bv*[height<=1080]+ba/b[height<=1080]",
-        "720" => "bv*[height<=720]+ba/b[height<=720]",
-        "480" => "bv*[height<=480]+ba/b[height<=480]",
+        "1080" => "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba/b[height<=1080]",
+        "720" => "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba/b[height<=720]",
+        "480" => "bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480][ext=mp4]/bv*[height<=480]+ba/b[height<=480]",
         "audio" => "bestaudio/best",
-        _ => "bv*+ba/b",
+        _ => "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
+    }
+}
+
+/// 档位需要附加在 -f 之外的 yt-dlp 参数。
+/// 视频档位强制合并容器为 MP4；音频档位提取并转码为 MP3（依赖 ffmpeg）。
+pub(super) fn extra_flags_for(quality: &str) -> &'static [&'static str] {
+    match quality {
+        "audio" => &["-x", "--audio-format", "mp3"],
+        _ => &["--merge-output-format", "mp4"],
     }
 }
 

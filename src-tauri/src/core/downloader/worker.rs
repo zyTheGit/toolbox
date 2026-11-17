@@ -8,7 +8,7 @@ use crate::core::tools;
 use crate::models::{Job, JobProgress, ToolStatus};
 
 use super::args::{render_redacted, validate_extra_args};
-use super::naming::{effective_threads, format_for, now_string, output_template};
+use super::naming::{effective_threads, extra_flags_for, format_for, now_string, output_template};
 use super::parse::{failure_message, read_lines, split_args, tag_failure};
 use super::{Downloader, Finish, JobOptions};
 
@@ -144,6 +144,10 @@ impl Downloader {
             "-f".into(),
             format_for(&job.quality).into(),
         ];
+        // 按档位附加参数：视频统一合并为 MP4，音频提取为 MP3。
+        for flag in extra_flags_for(&job.quality) {
+            args.push((*flag).into());
+        }
 
         if ffmpeg.ok && !ffmpeg.path.trim().is_empty() {
             if let Some(parent) = Path::new(&ffmpeg.path).parent() {

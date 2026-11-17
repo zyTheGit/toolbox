@@ -38,8 +38,9 @@
         </div>
       </div>
       <div class="field">
-        <span class="label">画质</span>
-        <n-select v-model:value="quality" aria-label="画质" :options="qualityOptions" />
+        <span class="label">画质 / 格式</span>
+        <n-select v-model:value="quality" aria-label="画质与格式" :options="qualityOptions" />
+        <div class="hint">视频优先下载 MP4，音频提取为 MP3（需 ffmpeg）</div>
       </div>
       <div class="field">
         <span class="label">文件名</span>
@@ -106,11 +107,11 @@ const extraArgs = ref("");
 const submitting = ref(false);
 
 const qualityOptions = [
-  { label: "最佳（默认）", value: "best" },
-  { label: "1080p 及以下", value: "1080" },
-  { label: "720p 及以下", value: "720" },
-  { label: "480p 及以下", value: "480" },
-  { label: "仅音频", value: "audio" },
+  { label: "最佳 MP4（默认）", value: "best" },
+  { label: "1080p MP4 及以下", value: "1080" },
+  { label: "720p MP4 及以下", value: "720" },
+  { label: "480p MP4 及以下", value: "480" },
+  { label: "音频（MP3）", value: "audio" },
 ];
 
 const cookieOptions = [
