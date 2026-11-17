@@ -100,6 +100,29 @@ export interface QuickTranslateConfig {
   shortcut: string;
 }
 
+export interface SecretEntryView {
+  id: string;
+  name: string;
+  service: string;
+  note: string;
+  expiresOn: string;
+  createdAt: string;
+  updatedAt: string;
+  builtin: boolean;
+  masked: string;
+  daysLeft: number | null;
+  expired: boolean;
+}
+
+export interface SecretEntryInput {
+  id: string;
+  name: string;
+  service: string;
+  secret: string;
+  note: string;
+  expiresOn: string;
+}
+
 export interface AppConfig {
   schemaVersion: number;
   downloadDir: string;

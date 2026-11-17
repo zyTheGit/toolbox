@@ -6,6 +6,7 @@ import type {
   AutostartStatus,
   Job,
   ProviderInfo,
+  SecretEntryView,
   SecretStatus,
   Task,
   ToolsStatus,
@@ -25,6 +26,8 @@ interface StoreState {
   autostart: AutostartStatus | null;
   tasksPaused: boolean;
   secrets: SecretStatus;
+  secretEntries: SecretEntryView[];
+  secretEntriesLoaded: boolean;
   warnings: string[];
   toolProgress: Record<string, ToolProgress>;
   eventsOk: boolean;
@@ -44,6 +47,8 @@ export const store = reactive<StoreState>({
   autostart: null,
   tasksPaused: false,
   secrets: { openai: false, deepl: false, baidu: false, youdao: false },
+  secretEntries: [],
+  secretEntriesLoaded: false,
   warnings: [],
   toolProgress: {},
   eventsOk: false,
@@ -73,6 +78,13 @@ export async function loadSnapshot(): Promise<void> {
     store.error = err instanceof Error ? err.message : String(err);
     store.ready = true;
   }
+}
+
+export async function loadSecretEntries(force = false): Promise<SecretEntryView[]> {
+  if (store.secretEntriesLoaded && !force) return store.secretEntries;
+  store.secretEntries = await api.secretsList();
+  store.secretEntriesLoaded = true;
+  return store.secretEntries;
 }
 
 function upsertJob(job: Job): void {

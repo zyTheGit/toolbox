@@ -9,6 +9,8 @@ import type {
   HistoryPage,
   HistoryQuery,
   Job,
+  SecretEntryInput,
+  SecretEntryView,
   SecretPatch,
   Task,
   TaskInput,
@@ -53,6 +55,11 @@ export const api = {
   getDataDir: () => invoke<string>("get_data_dir"),
   dataExport: () => invoke<string>("data_export"),
   dataImport: () => invoke<string>("data_import"),
+  secretsList: () => invoke<SecretEntryView[]>("secrets_list"),
+  secretSave: (input: SecretEntryInput) =>
+    invoke<SecretEntryView[]>("secret_save", { input }),
+  secretDelete: (id: string) => invoke<SecretEntryView[]>("secret_delete", { id }),
+  secretReveal: (id: string) => invoke<string>("secret_reveal", { id }),
 };
 
 export const events = {
