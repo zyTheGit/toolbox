@@ -31,20 +31,6 @@
             </nav>
 
             <div class="sidebar-foot">
-              <div class="tool-row" :aria-label="toolLabel('yt-dlp', store.tools?.ytdlp.ok)">
-                <span>yt-dlp</span>
-                <span class="tool-state">
-                  <span class="dot" :class="{ ok: store.tools?.ytdlp.ok }"></span>
-                  {{ store.tools?.ytdlp.ok ? "就绪" : "缺失" }}
-                </span>
-              </div>
-              <div class="tool-row" :aria-label="toolLabel('ffmpeg', store.tools?.ffmpeg.ok)">
-                <span>ffmpeg</span>
-                <span class="tool-state">
-                  <span class="dot" :class="{ ok: store.tools?.ffmpeg.ok }"></span>
-                  {{ store.tools?.ffmpeg.ok ? "就绪" : "缺失" }}
-                </span>
-              </div>
               <div class="version">v{{ store.version || "0.1.0" }}</div>
             </div>
           </aside>
@@ -92,6 +78,7 @@
               <div v-show="page === 'translate'" class="view"><TranslateView /></div>
               <div v-show="page === 'download'" class="view"><DownloadView /></div>
               <div v-show="page === 'tasks'" class="view"><TasksView /></div>
+              <div v-show="page === 'dev'" class="view"><DevView /></div>
               <div v-show="page === 'settings'" class="view"><SettingsView /></div>
             </template>
           </main>
@@ -120,9 +107,10 @@ import { events } from "./api";
 const TranslateView = defineAsyncComponent(() => import("./views/TranslateView.vue"));
 const DownloadView = defineAsyncComponent(() => import("./views/DownloadView.vue"));
 const TasksView = defineAsyncComponent(() => import("./views/TasksView.vue"));
+const DevView = defineAsyncComponent(() => import("./views/DevView.vue"));
 const SettingsView = defineAsyncComponent(() => import("./views/SettingsView.vue"));
 
-type PageKey = "translate" | "download" | "tasks" | "settings";
+type PageKey = "translate" | "download" | "tasks" | "dev" | "settings";
 
 const page = ref<PageKey>("translate");
 
@@ -141,6 +129,11 @@ const navItems: Array<{ key: PageKey; label: string; icon: string }> = [
     key: "tasks",
     label: "定时任务",
     icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/><path d="M4 4l1.5 3"/><path d="M20 4l-1.5 3"/></svg>',
+  },
+  {
+    key: "dev",
+    label: "开发工具",
+    icon: '<svg viewBox="0 0 24 24"><path d="M8 6l-5 6 5 6"/><path d="M16 6l5 6-5 6"/><path d="M13.5 4l-3 16"/></svg>',
   },
   {
     key: "settings",
@@ -168,10 +161,6 @@ function dismissWarning(index: number): void {
   store.warnings.splice(index, 1);
 }
 
-function toolLabel(name: string, ok: boolean | undefined): string {
-  return `${name} ${ok ? "已就绪" : "缺失"}`;
-}
-
 function disposeEvents(): void {
   for (const off of unlisteners) off();
   unlisteners = [];
@@ -191,7 +180,13 @@ async function attachEvents(): Promise<void> {
 }
 
 function isPage(value: string): value is PageKey {
-  return value === "translate" || value === "download" || value === "tasks" || value === "settings";
+  return (
+    value === "translate" ||
+    value === "download" ||
+    value === "tasks" ||
+    value === "dev" ||
+    value === "settings"
+  );
 }
 
 async function reconnectEvents(): Promise<void> {
