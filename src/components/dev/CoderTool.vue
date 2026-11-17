@@ -64,20 +64,12 @@
       />
       <div v-if="urlResult" class="mono result-line selectable">{{ urlResult }}</div>
     </section>
-
-    <!-- 随机密码 -->
-    <PasswordTool />
-
-    <!-- 大小写 / 命名转换 -->
-    <CaseTool />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { NButton, NInput, useMessage } from "naive-ui";
-import PasswordTool from "./PasswordTool.vue";
-import CaseTool from "./CaseTool.vue";
 
 const message = useMessage();
 

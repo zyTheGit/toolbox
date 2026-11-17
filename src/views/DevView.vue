@@ -1,9 +1,6 @@
 <template>
   <div class="page">
-    <PageHead
-      title="开发工具"
-      subtitle="前端日常小工具：JSON / 编解码 / 正则，全部本地处理，不上传。"
-    />
+    <PageHead title="开发工具" subtitle="前端日常小工具，全部本地处理，不上传。" />
 
     <n-tabs v-model:value="tool" type="segment" animated>
       <n-tab-pane name="json" tab="JSON 工具">
@@ -14,6 +11,12 @@
       </n-tab-pane>
       <n-tab-pane name="regex" tab="正则测试">
         <RegexTool />
+      </n-tab-pane>
+      <n-tab-pane name="assist" tab="辅助工具">
+        <div class="assist-grid">
+          <PasswordTool />
+          <CaseTool />
+        </div>
       </n-tab-pane>
     </n-tabs>
   </div>
@@ -26,6 +29,8 @@ import PageHead from "../components/PageHead.vue";
 import JsonTool from "../components/dev/JsonTool.vue";
 import CoderTool from "../components/dev/CoderTool.vue";
 import RegexTool from "../components/dev/RegexTool.vue";
+import PasswordTool from "../components/dev/PasswordTool.vue";
+import CaseTool from "../components/dev/CaseTool.vue";
 
 const tool = ref("json");
 </script>
@@ -35,6 +40,19 @@ const tool = ref("json");
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.assist-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .assist-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 :deep(.n-tabs-tab) {
