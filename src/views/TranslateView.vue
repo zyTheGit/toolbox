@@ -26,7 +26,7 @@
           v-model:value="input"
           class="src-input"
           type="textarea"
-          :autosize="{ minRows: 10, maxRows: 20 }"
+          :autosize="false"
           placeholder="输入要翻译的内容，Ctrl + Enter 翻译"
           :disabled="loading"
           @keydown.ctrl.enter.prevent="doTranslate"
@@ -587,6 +587,22 @@ onBeforeUnmount(() => {
 
 .recent-error {
   padding: 0;
+}
+
+/* 输入框与右侧译文区等高：整体 flex 拉伸，内部 textarea 撑满。 */
+.src-input {
+  flex: 1;
+  min-height: 220px;
+}
+
+.src-input :deep(.n-input-wrapper),
+.src-input :deep(.n-input__textarea),
+.src-input :deep(textarea) {
+  height: 100%;
+}
+
+.src-input :deep(textarea) {
+  resize: none;
 }
 
 .pane-foot {
