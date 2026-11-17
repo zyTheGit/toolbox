@@ -195,5 +195,7 @@ watchEffect(() => generate());
   display: flex;
   flex-wrap: wrap;
   gap: 8px 14px;
+  /* 卡片被拉高时把选项贴到底部，避免内容挤在顶部 */
+  margin-top: auto;
 }
 </style>

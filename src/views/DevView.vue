@@ -46,7 +46,7 @@ const tool = ref("json");
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  align-items: start;
+  /* 默认 stretch：两张卡片等高，避免空白露出页面底色 */
 }
 
 @media (max-width: 900px) {
