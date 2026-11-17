@@ -18,18 +18,26 @@
         </div>
       </div>
 
-      <n-input
-        v-model:value="input"
-        class="json-input"
-        type="textarea"
-        :autosize="false"
-        placeholder='{"name":"Toolbox","tags":["翻译","下载"],"version":1}'
-        spellcheck="false"
-      />
+      <div ref="editorRef" class="editor-wrap">
+        <n-input
+          v-model:value="input"
+          class="json-input"
+          type="textarea"
+          :autosize="false"
+          placeholder='{"name":"Toolbox","tags":["翻译","下载"],"version":1}'
+          spellcheck="false"
+        />
+      </div>
     </div>
 
     <n-alert v-if="error" type="error" :bordered="false" class="result-block">
-      {{ error }}
+      <div class="error-head">
+        <span>{{ error.title }}</span>
+        <n-button v-if="error.snippet" size="tiny" text type="primary" @click="locateError">
+          定位到出错位置
+        </n-button>
+      </div>
+      <pre v-if="error.snippet" class="mono error-snippet">{{ error.snippet }}</pre>
     </n-alert>
 
     <div v-else-if="result" class="card result-card">
@@ -46,14 +54,28 @@
 import { ref } from "vue";
 import { NAlert, NButton, NInput, NSelect, useMessage } from "naive-ui";
 import { jsonToTs } from "../../utils/json-to-ts";
+import { parseJsonWithLocation } from "../../utils/json-parse";
 
 const message = useMessage();
+
+interface ErrorView {
+  /** 已带上行列的错误描述 */
+  title: string;
+  /** 出错行与指示符 */
+  snippet: string;
+  /** 0 基偏移，用于选中出错字符 */
+  position: number;
+}
 
 const input = ref("");
 const result = ref("");
 const resultLabel = ref("");
-const error = ref("");
+const error = ref<ErrorView | null>(null);
 const indent = ref<number | string>(2);
+const editorRef = ref<HTMLElement | null>(null);
+
+/** 解析失败标记：区分「JSON 根值就是 null」与「解析失败」两种情况 */
+const PARSE_FAILED = Symbol("parse-failed");
 
 const indentOptions = [
   { label: "2 空格", value: 2 as number | string },
@@ -61,40 +83,50 @@ const indentOptions = [
   { label: "Tab", value: "\t" as number | string },
 ];
 
-function parseInput(): unknown | null {
-  error.value = "";
+function parseInput(): unknown {
+  error.value = null;
   result.value = "";
   resultLabel.value = "";
-  const text = input.value.trim();
-  if (!text) {
-    error.value = "请先粘贴 JSON 内容。";
-    return null;
+  const text = input.value;
+  if (!text.trim()) {
+    error.value = { title: "请先粘贴 JSON 内容。", snippet: "", position: 0 };
+    return PARSE_FAILED;
   }
-  try {
-    return JSON.parse(text) as unknown;
-  } catch (err) {
-    error.value = `JSON 解析失败：${(err as Error).message}`;
-    return null;
+  const parsed = parseJsonWithLocation(text);
+  if (!parsed.ok) {
+    const { line, column, message: reason, snippet, position } = parsed.error;
+    error.value = { title: `第 ${line} 行第 ${column} 列：${reason}`, snippet, position };
+    return PARSE_FAILED;
   }
+  return parsed.value;
+}
+
+/** 选中输入框中出错的字符，快速定位 */
+function locateError(): void {
+  const position = error.value?.position;
+  const el = editorRef.value?.querySelector("textarea");
+  if (position === undefined || !el) return;
+  el.focus();
+  el.setSelectionRange(position, Math.min(position + 1, el.value.length));
 }
 
 function formatJson(): void {
   const data = parseInput();
-  if (data === null) return;
+  if (data === PARSE_FAILED) return;
   result.value = JSON.stringify(data, null, indent.value);
   resultLabel.value = "格式化结果";
 }
 
 function minifyJson(): void {
   const data = parseInput();
-  if (data === null) return;
+  if (data === PARSE_FAILED) return;
   result.value = JSON.stringify(data);
   resultLabel.value = "压缩结果";
 }
 
 function genTs(): void {
   const data = parseInput();
-  if (data === null) return;
+  if (data === PARSE_FAILED) return;
   result.value = jsonToTs(data);
   resultLabel.value = "TypeScript 类型定义";
 }
@@ -114,7 +146,7 @@ function copyResult(): void {
 function clearAll(): void {
   input.value = "";
   result.value = "";
-  error.value = "";
+  error.value = null;
   resultLabel.value = "";
 }
 </script>
@@ -184,5 +216,29 @@ function clearAll(): void {
 
 .result-block {
   margin: 0;
+}
+
+.editor-wrap {
+  display: contents;
+}
+
+.error-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  line-height: 1.6;
+}
+
+.error-snippet {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre;
+  background: var(--card, #fff);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 </style>
