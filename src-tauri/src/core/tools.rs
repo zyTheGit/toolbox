@@ -335,7 +335,7 @@ async fn fetch_checksum(client: &Client, url: &str) -> Result<String, String> {
 
 /// Verify a downloaded yt-dlp binary against the official SHA2-256SUMS asset
 /// published in the same release directory as the binary.
-async fn verify_ytdlp_checksum(client: &Client, part: &Path, url: &str) -> Result<(), String> {
+pub async fn verify_ytdlp_checksum(client: &Client, part: &Path, url: &str) -> Result<(), String> {
     let asset = url
         .rsplit('/')
         .next()
@@ -353,7 +353,7 @@ async fn verify_ytdlp_checksum(client: &Client, part: &Path, url: &str) -> Resul
 
 /// Verify a downloaded ffmpeg zip against the `.sha256` document published
 /// alongside the archive.
-async fn verify_ffmpeg_checksum(client: &Client, zip: &Path, url: &str) -> Result<(), String> {
+pub async fn verify_ffmpeg_checksum(client: &Client, zip: &Path, url: &str) -> Result<(), String> {
     let text = fetch_checksum(client, &format!("{url}.sha256")).await?;
     let expected = parse_bare_sha256(&text)
         .ok_or_else(|| "[TOOL] 官方校验文件格式异常，已放弃安装".to_string())?;
