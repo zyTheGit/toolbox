@@ -2,7 +2,7 @@
   <div class="page">
     <PageHead title="开发工具" subtitle="前端日常小工具，全部本地处理，不上传。" />
 
-    <n-tabs v-model:value="tool" type="segment" animated>
+    <n-tabs v-model:value="tool" type="segment">
       <n-tab-pane name="json" tab="JSON 工具">
         <JsonTool />
       </n-tab-pane>
