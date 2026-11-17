@@ -4,6 +4,7 @@ pub mod downloader;
 pub mod history;
 pub mod notify;
 pub mod persist;
+pub mod proc;
 pub mod quick;
 pub mod secrets;
 pub mod tool_sources;

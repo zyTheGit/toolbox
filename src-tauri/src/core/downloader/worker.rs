@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use tokio::process::Command;
 
+use crate::core::proc::kill_tree;
 use crate::core::tools;
 use crate::models::{Job, JobProgress, ToolStatus};
 
@@ -12,6 +13,7 @@ use super::naming::{effective_threads, extra_flags_for, format_for, now_string, 
 use super::parse::{failure_message, read_lines, split_args, tag_failure};
 use super::{Downloader, Finish, JobOptions};
 
+#[cfg(windows)]
 const NO_WINDOW: u32 = 0x0800_0000;
 
 impl Downloader {
@@ -239,29 +241,5 @@ impl Downloader {
                 self.finish_job(id, Finish::Failed(format!("[TOOL] yt-dlp 运行失败: {err}")));
             }
         }
-    }
-}
-
-pub(super) fn kill_tree(pid: u32) {
-    if cfg!(windows) {
-        let mut command = std::process::Command::new("taskkill");
-        command
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(NO_WINDOW);
-        }
-        let _ = command.spawn();
-    } else {
-        let _ = std::process::Command::new("kill")
-            .args(["-9", &format!("-{pid}")])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn();
     }
 }

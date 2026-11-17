@@ -110,35 +110,7 @@ pub fn resolve_work_dir(raw: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-pub fn kill_tree(pid: u32) {
-    if pid == 0 {
-        return;
-    }
-    #[cfg(windows)]
-    {
-        use std::process::{Command, Stdio};
-        let pid_text = pid.to_string();
-        let _ = Command::new("taskkill")
-            .args(["/PID", pid_text.as_str(), "/T", "/F"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    #[cfg(unix)]
-    {
-        use std::process::{Command, Stdio};
-        let group = format!("-{pid}");
-        let _ = Command::new("kill")
-            .args(["-9", group.as_str()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    #[cfg(not(any(windows, unix)))]
-    {
-        let _ = pid;
-    }
-}
+pub use crate::core::proc::kill_tree;
 
 #[cfg(test)]
 mod tests {
