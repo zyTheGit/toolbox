@@ -141,34 +141,7 @@ button {
   color: var(--muted);
 }
 
-.tool-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 0;
-}
-
-.tool-row .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #c9ced9;
-}
-
-.tool-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: #9aa1ad;
-}
-
-.tool-row .dot.ok {
-  background: var(--success);
-}
-
 .version {
-  margin-top: 10px;
   font-size: 11px;
   color: #9aa1ad;
 }
