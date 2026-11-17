@@ -1,13 +1,6 @@
 <template>
   <div class="page">
-    <PageHead title="设置" subtitle="下载、翻译、启动与命令执行。">
-      <template v-if="hasConfig">
-        <n-button :disabled="saving" @click="reload">重新载入</n-button>
-        <n-button type="primary" :loading="saving" :disabled="!dirty || saving" @click="save">
-          保存设置
-        </n-button>
-      </template>
-    </PageHead>
+    <PageHead title="设置" subtitle="下载、翻译、启动与命令执行。" />
 
     <EmptyState
       v-if="!hasConfig"
@@ -340,11 +333,13 @@
         </div>
       </section>
 
-      <div v-if="dirty" class="save-bar">
-        <span class="hint">有未保存的修改</span>
+      <div class="save-bar">
+        <span class="hint">{{ dirty ? "有未保存的修改" : "所有修改已保存" }}</span>
         <div class="save-bar-actions">
-          <n-button size="small" :disabled="saving" @click="discard">放弃修改</n-button>
-          <n-button size="small" type="primary" :loading="saving" @click="save">保存设置</n-button>
+          <n-button size="small" :disabled="!dirty || saving" @click="discard">放弃修改</n-button>
+          <n-button size="small" type="primary" :loading="saving" :disabled="!dirty || saving" @click="save">
+            保存设置
+          </n-button>
         </div>
       </div>
     </template>
@@ -814,6 +809,11 @@ async function save(): Promise<void> {
 </script>
 
 <style scoped>
+/* 底部保存栏常驻吸附，页面底部留白与吸附间距保持一致，避免滚到底时位移 */
+.page {
+  padding-bottom: 12px;
+}
+
 .field {
   display: flex;
   flex-direction: column;
