@@ -47,35 +47,5 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - run: cargo check --manifest-path src-tauri/Cargo.toml
-      - name: 运行 Rust 测试（Linux 诊断）
-        shell: bash
-        env:
-          RUST_BACKTRACE: "1"
-        run: |
-          set +e
-          if [ "${{ matrix.platform }}" != "ubuntu-22.04" ]; then
-            cargo test --manifest-path src-tauri/Cargo.toml
-            exit 0
-          fi
-          echo "=== 1. 进程组实验（shell 层） ==="
-          setsid sh -c 'sleep 20' &
-          child=$!
-          echo "实验子进程: $child"
-          ps -o pid,ppid,pgid,sid,cmd -p $child || true
-          kill -9 -$child && echo "kill -9 -$child 返回 0" || echo "kill -9 -$child 失败"
-          sleep 0.3
-          if [ -d /proc/$child ]; then echo "实验子进程仍存活"; else echo "实验子进程已死"; fi
-          echo "kill 来源: $(command -v kill)"
-          echo "=== 2. 编译测试二进制 ==="
-          cargo test --manifest-path src-tauri/Cargo.toml --no-run
-          BIN=$(ls src-tauri/target/debug/build/toolbox/*/out/toolbox_lib-* | head -1)
-          echo "测试二进制: $BIN"
-          echo "=== 3. 只跑 exec 超时用例 ==="
-          timeout -s KILL 60 "$BIN" --test-threads=1 --nocapture exec::tests > /tmp/exec.log 2>&1; code=$?
-          echo "exec 用例退出码: $code"
-          tail -40 /tmp/exec.log
-          echo "=== 4. 全量单线程 ==="
-          timeout -s KILL 90 "$BIN" --test-threads=1 > /tmp/single.log 2>&1; code2=$?
-          echo "全量退出码: $code2"
-          tail -30 /tmp/single.log
-          exit 0
+      - name: 运行 Rust 测试
+        run: cargo test --manifest-path src-tauri/Cargo.toml
