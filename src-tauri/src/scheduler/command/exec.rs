@@ -282,7 +282,13 @@ mod tests {
             env: Vec::new(),
             timeout: Duration::from_millis(300),
         };
-        let outcome = run_command(spec, Arc::new(AtomicBool::new(false)), |_| {}, |_| {}).await;
+        let outcome = run_command(
+            spec,
+            Arc::new(AtomicBool::new(false)),
+            |pid| eprintln!("[diag] spawned child pid={pid} harness={}", std::process::id()),
+            |_| {},
+        )
+        .await;
         assert_eq!(outcome.status, "failed");
         assert!(outcome.error.starts_with("[TIMEOUT]"));
     }

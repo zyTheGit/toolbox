@@ -128,16 +128,47 @@ pub fn kill_tree(pid: u32) {
     {
         use std::process::{Command, Stdio};
         let group = format!("-{pid}");
-        let _ = Command::new("kill")
+        let harness = std::process::id();
+        eprintln!(
+            "[diag] kill_tree target={pid} harness={harness} harness_pgrp={} target_pgrp={} target_sid={} target_exists={}",
+            proc_field(harness, 2),
+            proc_field(pid, 2),
+            proc_field(pid, 3),
+            std::path::Path::new(&format!("/proc/{pid}")).exists(),
+        );
+        match Command::new("kill")
             .args(["-9", group.as_str()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+            .stdin(Stdio::null())
+            .output()
+        {
+            Ok(out) => eprintln!(
+                "[diag] kill -9 {group} code={:?} stderr={}",
+                out.status.code(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+            Err(err) => eprintln!("[diag] kill 启动失败: {err}"),
+        }
+        eprintln!(
+            "[diag] after kill target_exists={}",
+            std::path::Path::new(&format!("/proc/{pid}")).exists()
+        );
     }
     #[cfg(not(any(windows, unix)))]
     {
         let _ = pid;
     }
+}
+
+/// 诊断用：读取 /proc/<pid>/stat 中 comm 之后的字段（0=state, 1=ppid, 2=pgrp, 3=session）。
+#[cfg(unix)]
+fn proc_field(pid: u32, index: usize) -> String {
+    std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|text| {
+            let rest = text.rsplit(')').next()?.trim().to_string();
+            rest.split_whitespace().nth(index).map(str::to_string)
+        })
+        .unwrap_or_else(|| "?".into())
 }
 
 #[cfg(test)]
