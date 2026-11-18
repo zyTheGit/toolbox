@@ -9,18 +9,18 @@
 | 项目 | 状态 |
 | --- | --- |
 | 版本号 | `package.json` / `tauri.conf.json` / `Cargo.toml` 均为 `0.1.0`，`node scripts/check-version.mjs` 通过 |
-| 推送状态 | `origin/main` 仍为 `3f897d6`；T0-T7 的全部改动尚在工作区，**未提交、未 push** |
-| 本地构建验证 | 2026-11-18 10:47 已在包含 T0-T7 改动的工作区重建 NSIS 与便携版；提交后建议再构建一次，确保产物时间晚于新 HEAD |
+| 推送状态 | `origin/main` 仍为 `3f897d6`；T0-T7 已按功能拆分提交（`6d19b24` 至 `8261964`），**未 push** |
+| 本地构建验证 | 2026-11-18 11:43 已在 T0-T7 提交后的 HEAD 重建 NSIS 与便携版，并完成 7 页运行冒烟；产物校验值见交接文档附录 C.3 |
 | tag | 仓库无任何 tag，`v0.1.0` 未创建 |
 | CI 门禁 | 新增 `npm run build`、版本一致性、文件长度检查后尚未在远端验证；最近一次四平台全绿仍早于当前改动 |
 | 发版基线（T0） | 已新增 `scripts/check-version.mjs`、`scripts/check-file-length.mjs`、`scripts/sha256sums.mjs`、`docs/RELEASE_CHECKLIST.md`；CI / Release workflow 与 CSP 已加固，Action 已固定到 commit SHA |
 
 待办（顺序不可颠倒，AGENTS.md 要求本地构建通过后才能推 tag；commit / push / tag / 发布需用户确认）：
 
-1. 用户确认提交范围后，按功能拆分提交 T0-T7 改动，提交信息遵循 `<类型>: <中文描述>`
-2. 提交后在 HEAD 重新执行 `npm run typecheck`、`npm run test`、`cargo test`、`npm run build`、`npm run tauri:build`、`npm run package:portable`，记录 NSIS / zip 路径、大小、时间与 SHA256
-3. 运行 `node scripts/check-version.mjs` 与 `node scripts/check-file-length.mjs`，确认通过
-4. 按 `docs/RELEASE_CHECKLIST.md` 完成 NSIS 安装冒烟（托盘、自启、备份导入导出等），需用户授权安装
+1. 已完成：按功能拆分提交 T0-T7 改动（`6d19b24` 至 `8261964`）
+2. 已完成：在 HEAD 重新执行 `npm run typecheck`、`npm run test`、`npm run build`、`npm run tauri:build`、`npm run package:portable`，并完成便携版 7 页运行冒烟
+3. 已完成：`node scripts/check-version.mjs` 与 `node scripts/check-file-length.mjs` 通过
+4. 待授权：按 `docs/RELEASE_CHECKLIST.md` 完成 NSIS 安装冒烟（托盘、自启、备份导入导出等），安装会写入本机应用状态
 5. `git push origin main`，等待新触发的 CI 四平台结果
 6. `git tag -a v0.1.0 -m "Toolbox 0.1.0"` 并 `git push origin v0.1.0`
 7. 等待 GitHub Actions 四平台构建，产出草稿 Release
