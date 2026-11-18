@@ -56,6 +56,10 @@
       <div class="job-hint error-text">{{ failure.message }}</div>
       <div v-if="failure.action" class="job-hint hint">下一步：{{ failure.action }}</div>
     </template>
+    <div v-if="needsCredentials" class="job-hint credentials-hint">
+      <span class="credentials-tag">需重填凭据</span>
+      <span>该任务使用了代理 / Cookie / Referer 等凭据，凭据只保存在内存中，重启后重试需要重新填写。</span>
+    </div>
 
     <div v-if="job.status === 'running'" class="job-progress">
       <n-progress
@@ -73,6 +77,15 @@
       <pre v-if="logLines.length" class="mono job-log">{{ logLines.join("\n") }}</pre>
       <div v-else class="hint">暂无日志输出</div>
     </div>
+
+    <RetryCredentialsModal
+      :show="showCredentials"
+      :initial="retryInitial"
+      :submitting="retrySubmitting"
+      :error="retryError"
+      @update:show="showCredentials = $event"
+      @submit="submitCredentials"
+    />
   </div>
 </template>
 
@@ -80,16 +93,32 @@
 import { computed, ref } from "vue";
 import { NButton, NProgress, useDialog, useMessage } from "naive-ui";
 import StatusPill from "../StatusPill.vue";
+import RetryCredentialsModal from "./RetryCredentialsModal.vue";
 import { api } from "../../api";
 import type { Job } from "../../types";
 import { parseError, describeError, type AppError } from "../../utils/errors";
+import { useJobRetry } from "./useJobRetry";
 
 const props = defineProps<{ job: Job }>();
 
 const message = useMessage();
 const dialog = useDialog();
 const showLog = ref(false);
-const busy = ref(false);
+const {
+  busy,
+  showCredentials,
+  submitting: retrySubmitting,
+  error: retryError,
+  initial: retryInitial,
+  retry,
+  submitCredentials,
+} = useJobRetry(
+  () => props.job,
+  {
+    success: (text) => message.success(text),
+    error: (text) => message.error(text),
+  },
+);
 
 const QUALITY_LABEL: Record<string, string> = {
   best: "最佳画质",
@@ -105,6 +134,11 @@ const isActive = computed(
 const isTerminal = computed(() => !isActive.value);
 const canRetry = computed(
   () => props.job.status === "failed" || props.job.status === "interrupted",
+);
+const needsCredentials = computed(
+  () =>
+    Boolean(props.job.hasCredentials) &&
+    (props.job.status === "failed" || props.job.status === "interrupted"),
 );
 
 const FAILURE_RULES: Array<[RegExp, AppError["action"]]> = [
@@ -177,19 +211,6 @@ async function openDir(): Promise<void> {
   try {
     const path = await api.jobOpen(props.job.id);
     message.success(`已打开 ${path}`);
-  } catch (err) {
-    message.error(errorText(err));
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function retry(): Promise<void> {
-  if (busy.value) return;
-  busy.value = true;
-  try {
-    await api.jobRetry(props.job.id);
-    message.success("已重新加入队列");
   } catch (err) {
     message.error(errorText(err));
   } finally {
@@ -281,6 +302,25 @@ function remove(): void {
 
 .job-hint {
   margin-top: 8px;
+}
+
+.credentials-hint {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7e6;
+  border: 1px solid #ffe1b3;
+  color: #8a5a00;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.credentials-tag {
+  flex: none;
+  font-weight: 600;
+  color: #b86b00;
 }
 
 .job-progress {

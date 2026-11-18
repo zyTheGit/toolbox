@@ -73,6 +73,9 @@ pub struct Job {
     pub created_at: String,
     pub started_at: String,
     pub finished_at: String,
+    /// 本次任务是否在内存中持有下载凭据（不落盘，默认 false）。
+    #[serde(default)]
+    pub has_credentials: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -103,4 +106,18 @@ impl Default for DownloadRequest {
             extra_args: String::new(),
         }
     }
+}
+
+/// 重试时补填的下载参数（字段全部可选，缺省表示保持原值）。
+///
+/// 凭据只进入进程内凭据表，不写回 `jobs.json`。
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct JobRetryRequest {
+    pub referer: Option<String>,
+    pub cookies_browser: Option<String>,
+    pub proxy: Option<String>,
+    pub extra_args: Option<String>,
+    pub quality: Option<String>,
+    pub threads: Option<u32>,
 }

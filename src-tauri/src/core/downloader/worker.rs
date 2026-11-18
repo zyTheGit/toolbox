@@ -9,15 +9,20 @@ use crate::core::tools;
 use crate::models::{Job, JobProgress, ToolStatus};
 
 use super::args::{render_redacted, validate_extra_args};
+use super::credentials::{JobCredentials, CREDENTIALS_MISSING};
 use super::naming::{effective_threads, extra_flags_for, format_for, now_string, output_template};
 use super::parse::{failure_message, read_lines, split_args, tag_failure};
-use super::{Downloader, Finish, JobOptions};
+use super::{Downloader, Finish};
 
 #[cfg(windows)]
 const NO_WINDOW: u32 = 0x0800_0000;
 
 impl Downloader {
     pub(super) fn ensure_worker(&self) {
+        // 无 AppHandle 的测试实例不启动后台 worker。
+        if self.app.is_none() {
+            return;
+        }
         {
             let mut inner = self.inner.lock();
             if inner.running || inner.shutdown {
@@ -111,11 +116,14 @@ impl Downloader {
         let Some(job) = self.job_snapshot(id) else {
             return;
         };
-        let options = JobOptions {
-            referer: job.referer.clone(),
-            cookies_browser: job.cookies_browser.clone(),
-            proxy: job.proxy.clone(),
-            extra_args: job.extra_args.clone(),
+        // 凭据只从进程内凭据表读取；任务字段里始终是空的。
+        let options = match self.job_credentials(id) {
+            Some(creds) => creds,
+            None if job.has_credentials => {
+                self.finish_job(id, Finish::Failed(CREDENTIALS_MISSING.into()));
+                return;
+            }
+            None => JobCredentials::default(),
         };
 
         if let Err(err) = validate_extra_args(&options.extra_args, config.security.allow_commands) {

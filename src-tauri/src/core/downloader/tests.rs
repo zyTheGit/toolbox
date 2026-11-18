@@ -152,12 +152,11 @@ fn assigns_batch_names() {
 
 #[test]
 fn restart_marks_active_jobs_interrupted_and_keeps_parameters() {
+    // 凭据不再随 Job 落盘，这里的运行参数只保留文件名、线程与画质。
     let mut job = Job {
         status: "running".into(),
         name: "视频".into(),
-        referer: "https://example.com".into(),
-        cookies_browser: "edge".into(),
-        extra_args: "--limit-rate 1M".into(),
+        quality: "720".into(),
         threads: 8,
         ..Job::default()
     };
@@ -169,10 +168,10 @@ fn restart_marks_active_jobs_interrupted_and_keeps_parameters() {
     assert!(job.error.contains("可重试"));
     assert!(job.progress.speed.is_empty());
     assert_eq!(job.name, "视频");
-    assert_eq!(job.referer, "https://example.com");
-    assert_eq!(job.cookies_browser, "edge");
-    assert_eq!(job.extra_args, "--limit-rate 1M");
+    assert_eq!(job.quality, "720");
     assert_eq!(job.threads, 8);
+    assert!(job.referer.is_empty());
+    assert!(job.proxy.is_empty());
 
     assert!(!mark_interrupted(&mut job, "2026-01-02 00:00:00"));
 }
@@ -235,4 +234,30 @@ fn resolves_effective_threads() {
     job.threads = 0;
     config.fragment_threads = 0;
     assert_eq!(effective_threads(&job, &config), 1);
+}
+
+/// 备份恢复后的重载入口：磁盘上的记录必须可读回，且不得自动恢复下载。
+#[test]
+fn reload_reads_restored_jobs_from_disk() {
+    let dir = std::env::temp_dir().join(format!("toolbox-jobs-reload-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("jobs.json");
+
+    let restored = Job {
+        id: "restored-job".into(),
+        url: "https://example.com/video.m3u8".into(),
+        status: "interrupted".into(),
+        error: "来自备份，需重新确认后重试".into(),
+        has_credentials: false,
+        ..Job::default()
+    };
+    crate::core::persist::save_json(&path, &[restored]).unwrap();
+
+    let jobs = super::read_jobs(&path).unwrap().unwrap();
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].id, "restored-job");
+    assert!(jobs[0].referer.is_empty());
+    assert!(jobs[0].proxy.is_empty());
+    assert_eq!(jobs[0].status, "interrupted");
+    assert!(!is_active(&jobs[0]));
 }

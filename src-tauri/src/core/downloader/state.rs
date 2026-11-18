@@ -7,6 +7,7 @@ use crate::models::Job;
 use crate::state::push_warning;
 
 use super::args::redact_text;
+use super::credentials::{strip_job, JobCredentials};
 use super::naming::now_string;
 use super::parse::{parse_file, parse_progress, scan_output_file};
 use super::{Downloader, Finish, Inner};
@@ -120,10 +121,12 @@ impl Downloader {
                 label
             };
             if snapshot.status == "completed" {
-                crate::core::notify::notify(&self.app, "download", "下载完成", &label);
-            } else {
+                if let Some(app) = &self.app {
+                    crate::core::notify::notify(app, "download", "下载完成", &label);
+                }
+            } else if let Some(app) = &self.app {
                 crate::core::notify::notify(
-                    &self.app,
+                    app,
                     "download",
                     "下载失败",
                     &format!("{label}：点击查看原因"),
@@ -168,12 +171,25 @@ impl Downloader {
             .cloned()
     }
 
+    /// 从内存凭据表取出执行凭据；`None` 表示该任务没有留存凭据。
+    pub(super) fn job_credentials(&self, id: &str) -> Option<JobCredentials> {
+        self.inner.lock().credentials.get(id).cloned()
+    }
+
     pub(super) fn emit_job(&self, job: &Job) {
-        let _ = self.app.emit("job-updated", job);
+        let Some(app) = &self.app else {
+            return;
+        };
+        let mut payload = job.clone();
+        strip_job(&mut payload);
+        let _ = app.emit("job-updated", &payload);
     }
 
     pub(super) fn emit_removed(&self, id: &str) {
-        let _ = self.app.emit("job-removed", id.to_string());
+        let Some(app) = &self.app else {
+            return;
+        };
+        let _ = app.emit("job-removed", id.to_string());
     }
 
     pub(super) fn save(&self) {
@@ -199,7 +215,17 @@ impl Downloader {
             })
             .collect();
 
-        if let Err(err) = persist::save_json(&self.paths.jobs_file, &kept) {
+        // 落盘前的最后一道防线：即使未来有别的入口构造 Job，也不会把凭据写进 jobs.json。
+        let sanitized: Vec<Job> = kept
+            .into_iter()
+            .map(|job| {
+                let mut copy = job.clone();
+                strip_job(&mut copy);
+                copy
+            })
+            .collect();
+
+        if let Err(err) = persist::save_json(&self.paths.jobs_file, &sanitized) {
             push_warning(&self.warnings, format!("保存下载任务失败: {err}"));
         }
     }

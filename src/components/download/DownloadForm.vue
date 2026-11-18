@@ -91,6 +91,7 @@ import { NButton, NInput, NSelect, useMessage } from "naive-ui";
 import { api } from "../../api";
 import { store } from "../../store";
 import { describeError } from "../../utils/errors";
+import { rememberCredentials } from "./sessionCredentials";
 
 const message = useMessage();
 
@@ -207,6 +208,13 @@ async function submit(): Promise<void> {
     });
     urlText.value = "";
     fileName.value = "";
+    // 记住本会话最近一次输入的凭据，供重启后重试对话框预填（仅内存）。
+    rememberCredentials({
+      referer: referer.value,
+      cookiesBrowser: cookiesBrowser.value,
+      proxy: proxy.value,
+      extraArgs: extraArgs.value,
+    });
     message.success(`已加入 ${jobs.length} 个下载任务`);
   } catch (err) {
     message.error(errorText(err));

@@ -13,31 +13,30 @@ use crate::models::{AppConfig, DownloadRequest, Job, JobProgress};
 use crate::state::{push_warning, AppPaths, SharedConfig, Warnings};
 
 mod args;
+mod credentials;
 mod naming;
 mod parse;
+mod retry;
 mod state;
 mod worker;
 
 pub(crate) use self::args::redact_text;
 use self::args::validate_extra_args;
+use self::credentials::{adopt_loaded_jobs, strip_job, JobCredentials};
 use self::naming::{job_name, now_string, sanitize_file_name};
 use self::state::{is_active, mark_interrupted};
 use crate::core::proc::kill_tree;
 
 #[cfg(test)]
+mod credentials_tests;
+#[cfg(test)]
 mod tests;
-
-#[derive(Clone, Default)]
-struct JobOptions {
-    referer: String,
-    cookies_browser: String,
-    proxy: String,
-    extra_args: String,
-}
 
 #[derive(Default)]
 struct Inner {
     jobs: Vec<Job>,
+    /// 仅进程内持有的下载凭据；绝不落盘，应用退出即丢失。
+    credentials: HashMap<String, JobCredentials>,
     running: bool,
     cancel_ids: HashSet<String>,
     children: HashMap<String, u32>,
@@ -47,7 +46,7 @@ struct Inner {
 
 #[derive(Clone)]
 pub struct Downloader {
-    app: AppHandle,
+    app: Option<AppHandle>,
     paths: AppPaths,
     config: SharedConfig,
     warnings: Warnings,
@@ -68,7 +67,26 @@ impl Downloader {
         config: SharedConfig,
         warnings: Warnings,
     ) -> Self {
-        let mut jobs = match persist::load_json::<Vec<Job>>(&paths.jobs_file) {
+        Self::build(Some(app), paths, config, warnings)
+    }
+
+    /// 单元测试用构建器：没有 AppHandle，不发射事件、不启动 worker。
+    #[cfg(test)]
+    pub(super) fn for_test(
+        paths: AppPaths,
+        config: SharedConfig,
+        warnings: Warnings,
+    ) -> Self {
+        Self::build(None, paths, config, warnings)
+    }
+
+    fn build(
+        app: Option<AppHandle>,
+        paths: AppPaths,
+        config: SharedConfig,
+        warnings: Warnings,
+    ) -> Self {
+        let mut jobs = match read_jobs(&paths.jobs_file) {
             Ok(Some(jobs)) => jobs,
             Ok(None) => Vec::new(),
             Err(err) => {
@@ -79,16 +97,9 @@ impl Downloader {
 
         // Restart policy: never resume downloads automatically. Queued and
         // running jobs become interrupted and keep their parameters for retry.
-        let mut changed = false;
-        let stamp = now_string();
-        for job in jobs.iter_mut() {
-            for line in job.log.iter_mut() {
-                *line = redact_text(line);
-            }
-            if mark_interrupted(job, &stamp) {
-                changed = true;
-            }
-        }
+        // 旧版明文凭据在此迁入内存表，并立即原子写回已剥离的 jobs.json。
+        let mut credentials = HashMap::new();
+        let (changed, migrated) = adopt_loaded_jobs(&mut jobs, &mut credentials, &now_string());
 
         let downloader = Self {
             app,
@@ -97,12 +108,21 @@ impl Downloader {
             warnings,
             inner: Arc::new(Mutex::new(Inner {
                 jobs,
+                credentials,
                 ..Inner::default()
             })),
             save_order: Arc::new(Mutex::new(())),
         };
-        if changed {
+        if changed || migrated > 0 {
             downloader.save();
+        }
+        if migrated > 0 {
+            push_warning(
+                &downloader.warnings,
+                format!(
+                    "检测到 {migrated} 条下载记录含明文凭据，已迁入内存并从 jobs.json 清除；重启后重试需要重新填写凭据"
+                ),
+            );
         }
         downloader
     }
@@ -158,11 +178,10 @@ impl Downloader {
         } else {
             request.quality.trim().to_string()
         };
-        let referer = request.referer.trim().to_string();
-        let cookies_browser = request.cookies_browser.trim().to_string();
-        let proxy = request.proxy.trim().to_string();
-        let extra_args = request.extra_args.trim().to_string();
-        validate_extra_args(&extra_args, config.security.allow_commands)?;
+        // 凭据只进入内存表；Job 上的四个字段一律留空，避免落盘与事件外泄。
+        let credentials = JobCredentials::from_request(request);
+        validate_extra_args(&credentials.extra_args, config.security.allow_commands)?;
+        let has_credentials = !credentials.is_empty();
 
         let stamp = now_string();
         let base_name = request
@@ -188,10 +207,10 @@ impl Downloader {
                     out_dir: out_dir.clone(),
                     name,
                     threads,
-                    referer: referer.clone(),
-                    cookies_browser: cookies_browser.clone(),
-                    proxy: proxy.clone(),
-                    extra_args: extra_args.clone(),
+                    referer: String::new(),
+                    cookies_browser: String::new(),
+                    proxy: String::new(),
+                    extra_args: String::new(),
                     status: "queued".into(),
                     progress: JobProgress::default(),
                     log: Vec::new(),
@@ -200,7 +219,13 @@ impl Downloader {
                     created_at: stamp.clone(),
                     started_at: String::new(),
                     finished_at: String::new(),
+                    has_credentials,
                 };
+                if has_credentials {
+                    inner
+                        .credentials
+                        .insert(job.id.clone(), credentials.clone());
+                }
                 created.push(job);
             }
             inner.jobs.splice(0..0, created.clone());
@@ -264,35 +289,12 @@ impl Downloader {
                 return Err("[CONFLICT] 请先取消任务".into());
             }
             inner.jobs.remove(index);
+            // 记录被移除后，内存凭据同步清理，避免残留。
+            inner.credentials.remove(id);
         }
         self.emit_removed(id);
         self.save();
         Ok(())
-    }
-
-    /// Re-queue an interrupted or failed job with its original parameters.
-    pub fn retry(&self, id: &str) -> Result<Job, String> {
-        let job = {
-            let mut inner = self.inner.lock();
-            let Some(job) = inner.jobs.iter_mut().find(|item| item.id == id) else {
-                return Err("[CONFLICT] 任务不存在".into());
-            };
-            if is_active(job) {
-                return Err("[CONFLICT] 任务正在排队或运行，无需重试".into());
-            }
-            job.status = "queued".into();
-            job.error.clear();
-            job.file.clear();
-            job.progress = JobProgress::default();
-            job.log.clear();
-            job.started_at.clear();
-            job.finished_at.clear();
-            job.clone()
-        };
-        self.emit_job(&job);
-        self.save();
-        self.ensure_worker();
-        Ok(job)
     }
 
     pub fn open(&self, id: &str) -> Result<String, String> {
@@ -325,8 +327,33 @@ impl Downloader {
 
     pub fn list(&self) -> Vec<Job> {
         let mut jobs = self.inner.lock().jobs.clone();
+        // 防御性剥离：列表 / 快照永不含凭据。
+        for job in jobs.iter_mut() {
+            strip_job(job);
+        }
         jobs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         jobs
+    }
+
+    /// 备份恢复后从磁盘重新载入下载记录（不自动继续下载）。
+    ///
+    /// `keep_stopped` 为 true 时保持停写状态（恢复成功后等待重启）；
+    /// 为 false 时恢复正常调度（恢复失败回滚后）。
+    pub fn reload_from_disk(&self, keep_stopped: bool) -> Result<(), String> {
+        let mut jobs = read_jobs(&self.paths.jobs_file)?.unwrap_or_default();
+        // 恢复的记录同样走“明文凭据迁入内存”的路径；写盘交由后续保存或下次启动处理，
+        // 避免干扰备份恢复的回滚语义。
+        let mut credentials = HashMap::new();
+        adopt_loaded_jobs(&mut jobs, &mut credentials, &now_string());
+        let mut inner = self.inner.lock();
+        inner.jobs = jobs;
+        inner.credentials = credentials;
+        inner.cancel_ids.clear();
+        inner.children.clear();
+        inner.last_emit.clear();
+        inner.running = false;
+        inner.shutdown = keep_stopped;
+        Ok(())
     }
 
     pub fn active_count(&self) -> usize {
@@ -359,4 +386,11 @@ impl Downloader {
         }
         self.save();
     }
+}
+
+/// 读取下载记录文件；`Ok(None)` 表示文件尚不存在。
+///
+/// 启动初始化与备份恢复后的重载共用这一入口，避免两套加载逻辑。
+fn read_jobs(path: &Path) -> Result<Option<Vec<Job>>, String> {
+    persist::load_json::<Vec<Job>>(path)
 }
