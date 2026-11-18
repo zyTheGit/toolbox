@@ -1,5 +1,6 @@
 # 发版流程：推送 v* tag 触发多平台构建，产物以草稿形式挂在 GitHub Release。
-# Release 描述发布前需人工分节填写：新增 / 改动 / 优化，大版本需说明兼容性。
+# Release 描述发布前需人工分节填写：新增 / 改动 / 优化 / 兼容性，并附 SHA256SUMS 与便携版。
+# 发版步骤与人工检查项见 docs/RELEASE_CHECKLIST.md。
 
 name: Release
 
@@ -19,26 +20,31 @@ jobs:
         include:
           - platform: macos-latest
             args: --target aarch64-apple-darwin
+            artifact: macos-aarch64
           - platform: macos-latest
             args: --target x86_64-apple-darwin
+            artifact: macos-x64
           - platform: ubuntu-22.04
             args: ""
+            artifact: linux-x64
           - platform: windows-latest
             args: ""
+            artifact: windows-x64
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      # Action 固定到 commit SHA（2026-11-18 通过 git ls-remote 查询），升级需人工更新并复核。
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable 分支，2026-11-18
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
@@ -50,7 +56,10 @@ jobs:
 
       - run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: 版本一致性检查（三处版本 + tag）
+        run: node scripts/check-version.mjs
+
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -59,3 +68,29 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Windows 额外产出便携版 zip，并上传到同一个草稿 Release。
+      - name: 打包 Windows 便携版
+        if: matrix.platform == 'windows-latest'
+        run: npm run package:portable
+
+      - name: 上传便携版到草稿 Release
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $files = Get-ChildItem -Path portable -Filter "Toolbox-*.zip"
+          if (-not $files) { throw "未找到便携版 zip，请检查 npm run package:portable 输出" }
+          foreach ($file in $files) {
+            gh release upload "${{ github.ref_name }}" $file.FullName --clobber
+          }
+
+      # 每个平台生成独立校验文件，避免多 job 并发上传同名文件冲突。
+      - name: 生成 SHA256 校验文件
+        run: node scripts/sha256sums.mjs --out SHA256SUMS-${{ matrix.artifact }}.txt
+
+      - name: 上传 SHA256 校验文件
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" SHA256SUMS-${{ matrix.artifact }}.txt --clobber

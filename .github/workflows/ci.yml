@@ -23,6 +23,13 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test
+      - run: npm run build
+
+      - name: 版本一致性检查（三处版本 + tag）
+        run: node scripts/check-version.mjs
+
+      - name: 单文件长度基线检查（400 行）
+        run: node scripts/check-file-length.mjs
 
   rust:
     strategy:
