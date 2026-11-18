@@ -1,5 +1,6 @@
 //! 数据模型：按领域拆分，统一从 `models::` 重导出，调用方引用路径不变。
 
+mod backup;
 mod config;
 mod db;
 mod download;
@@ -8,17 +9,19 @@ mod snapshot;
 mod task;
 mod translate;
 
+pub use backup::ImportOutcome;
 pub use config::{
-    AppConfig, BaiduConfig, DeepLConfig, HistoryConfig, NotifyConfig, OpenAiConfig,
-    QuickTranslateConfig, SecurityConfig, StartupConfig, ToolPaths, TranslateConfig,
-    YoudaoConfig, CONFIG_SCHEMA_VERSION,
+    AppConfig, BaiduConfig, ConfigConflictError, ConfigSaveError, DeepLConfig, HistoryConfig,
+    NotifyConfig, OpenAiConfig, QuickTranslateConfig, SecurityConfig, StartupConfig, ToolPaths,
+    TranslateConfig, YoudaoConfig, CONFIG_SCHEMA_VERSION,
 };
 pub use db::{
     DbColumn, DbDatabase, DbHistoryEntryView, DbOpenInput, DbQueryResult, DbSchema, DbSessionInfo,
     DbTable,
 };
 pub use download::{
-    DownloadRequest, Job, JobProgress, ToolInstallResult, ToolProgress, ToolStatus, ToolsStatus,
+    DownloadRequest, Job, JobProgress, JobRetryRequest, ToolInstallResult, ToolProgress,
+    ToolStatus, ToolsStatus,
 };
 pub use llm::{
     LlmConfig, LlmProviderConfig, LlmRequest, LlmResponse, LlmTemplate, LlmUsageDay, LlmUsageModel,
