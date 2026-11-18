@@ -2,29 +2,32 @@
 
 整理时间：2026-11-18（T8 文档验收更新）。范围：0.1.0 发版前未完成的工作、已知问题与规划中未启动的功能。第 7 节四项规划功能已于 2026-11-17 完成实现；T0-T7 的改造与验证记录见 `docs/交接文档-2026-11-17.md` 附录 C。
 
-## 1. 阻塞项：0.1.0 发版（基线已就绪，等待重建与发版）
+## 1. 阻塞项：0.1.0 发版（草稿已就绪，等待安装冒烟与发布确认）
 
 当前状态：
 
 | 项目 | 状态 |
 | --- | --- |
 | 版本号 | `package.json` / `tauri.conf.json` / `Cargo.toml` 均为 `0.1.0`，`node scripts/check-version.mjs` 通过 |
-| 推送状态 | `origin/main` 仍为 `3f897d6`；T0-T7 已按功能拆分提交（`6d19b24` 至 `8261964`），**未 push** |
+| 推送状态 | `origin/main` 已更新至 `cc5614a`；T0-T7 与两处 CI 测试修复均已推送 |
 | 本地构建验证 | 2026-11-18 11:43 已在 T0-T7 提交后的 HEAD 重建 NSIS 与便携版，并完成 7 页运行冒烟；产物校验值见交接文档附录 C.3 |
-| tag | 仓库无任何 tag，`v0.1.0` 未创建 |
-| CI 门禁 | 新增 `npm run build`、版本一致性、文件长度检查后尚未在远端验证；最近一次四平台全绿仍早于当前改动 |
+| tag | `v0.1.0`（annotated）已推送，指向 `cc5614a` |
+| CI 门禁 | run `44234306466` 四平台全绿（frontend + Windows / macOS / Ubuntu Rust） |
+| 发版构建 | Release run `44234824785` 四平台全绿 |
+| 草稿 Release | `Toolbox v0.1.0` 已生成，描述已填写，**未发布**；Windows 产物哈希已与 `SHA256SUMS-windows-x64.txt` 比对一致 |
 | 发版基线（T0） | 已新增 `scripts/check-version.mjs`、`scripts/check-file-length.mjs`、`scripts/sha256sums.mjs`、`docs/RELEASE_CHECKLIST.md`；CI / Release workflow 与 CSP 已加固，Action 已固定到 commit SHA |
 
-待办（顺序不可颠倒，AGENTS.md 要求本地构建通过后才能推 tag；commit / push / tag / 发布需用户确认）：
+待办：
 
 1. 已完成：按功能拆分提交 T0-T7 改动（`6d19b24` 至 `8261964`）
 2. 已完成：在 HEAD 重新执行 `npm run typecheck`、`npm run test`、`npm run build`、`npm run tauri:build`、`npm run package:portable`，并完成便携版 7 页运行冒烟
 3. 已完成：`node scripts/check-version.mjs` 与 `node scripts/check-file-length.mjs` 通过
-4. 待授权：按 `docs/RELEASE_CHECKLIST.md` 完成 NSIS 安装冒烟（托盘、自启、备份导入导出等），安装会写入本机应用状态
-5. `git push origin main`，等待新触发的 CI 四平台结果
-6. `git tag -a v0.1.0 -m "Toolbox 0.1.0"` 并 `git push origin v0.1.0`
-7. 等待 GitHub Actions 四平台构建，产出草稿 Release
-8. 复核四平台产物、Windows 便携版与各平台 `SHA256SUMS-*.txt`，人工填写 Release 描述（分节）后再发布
+4. **待授权**：按 `docs/RELEASE_CHECKLIST.md` 完成 NSIS 安装冒烟（托盘、自启、备份导入导出等），安装会写入本机应用状态
+5. 已完成：`git push origin main`，CI run `44234306466` 四平台全绿
+6. 已完成：`git tag -a v0.1.0 -m "Toolbox 0.1.0"` 并推送，tag 指向 `cc5614a`
+7. 已完成：Release run `44234824785` 四平台构建全绿
+8. 已完成：复核草稿 Release 产物与 `SHA256SUMS-*.txt`，填写发布描述；Windows 安装包 / 便携包实测哈希一致
+9. **待用户确认**：NSIS 冒烟通过后再手动发布草稿 Release
 
 ### Release 描述草稿（0.1.0 为首个版本，兼容性无破坏性变更）
 
