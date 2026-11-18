@@ -169,7 +169,13 @@ mod tests {
         let backup_dir = apply(&paths, &sample_plan(&paths)).unwrap();
 
         let config_text = std::fs::read_to_string(&paths.config_file).unwrap();
-        assert!(!config_text.contains("old"));
+        // 旧测试用 `!contains("old")` 会误伤合法字段（如 toolDownloadMirror 的小写形式），
+        // 这里只拒绝原始占位内容，并确认已写入新配置。
+        assert!(
+            !config_text.contains("\"old\":true") && !config_text.contains("\"old\": true"),
+            "旧配置未被替换：{config_text}"
+        );
+        assert!(config_text.contains("\"schemaVersion\""));
         let tasks: Vec<Task> = persist::load_json(&paths.tasks_file).unwrap().unwrap();
         assert_eq!(tasks[0].id, "restored");
 
