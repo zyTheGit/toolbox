@@ -1,5 +1,27 @@
 //! SQL 文本处理：只允许单条语句，并为分页包装可包装的查询。
 
+/// 远程只读会话允许的语句首关键字（MySQL 与 PostgreSQL 共用）。
+/// PostgreSQL 依赖该白名单拒绝 `SET default_transaction_read_only = off` 之类的绕过尝试。
+pub const READ_ONLY_KEYWORDS: [&str; 7] = [
+    "select", "with", "values", "show", "describe", "desc", "explain",
+];
+
+/// 首关键字是否属于查询类语句。
+pub fn is_read_only_keyword(keyword: &str) -> bool {
+    READ_ONLY_KEYWORDS.contains(&keyword)
+}
+
+/// 校验首关键字；不在白名单内时返回带数据库类型的中文错误。
+pub fn ensure_read_only(kind: &str, keyword: &str) -> Result<(), String> {
+    if is_read_only_keyword(keyword) {
+        return Ok(());
+    }
+    Err(format!(
+        "[PARAM] {kind} 只读会话不支持 {} 语句",
+        describe(keyword)
+    ))
+}
+
 /// 返回去掉首尾空白与末尾分号后的单条语句。
 /// 多语句、未闭合引号/注释都会报错，避免只读连接上出现意外执行。
 pub fn single_statement(sql: &str) -> Result<String, String> {
@@ -218,5 +240,19 @@ mod tests {
         assert!(!wrappable(&first_keyword("explain select 1")));
         let wrapped = wrap_page("select 1", 20, 40);
         assert!(wrapped.contains("LIMIT 21 OFFSET 40"));
+    }
+
+    #[test]
+    fn rejects_non_read_only_keywords() {
+        // PostgreSQL 不允许通过 SET 关掉只读会话
+        let statement = single_statement("SET default_transaction_read_only = off").unwrap();
+        let keyword = first_keyword(&statement);
+        let err = ensure_read_only("PostgreSQL", &keyword).unwrap_err();
+        assert!(err.starts_with("[PARAM] PostgreSQL 只读会话不支持 SET"), "{err}");
+        assert!(ensure_read_only("MySQL", &first_keyword("update t set x = 1")).is_err());
+        assert!(ensure_read_only("PostgreSQL", &first_keyword("select set_config('x','y',false)")).is_ok());
+        assert!(ensure_read_only("PostgreSQL", &first_keyword("WITH c AS (SELECT 1) SELECT * FROM c")).is_ok());
+        assert!(ensure_read_only("PostgreSQL", &first_keyword("EXPLAIN SELECT 1")).is_ok());
+        assert!(ensure_read_only("PostgreSQL", &first_keyword("SHOW statement_timeout")).is_ok());
     }
 }

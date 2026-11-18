@@ -1,8 +1,8 @@
 <template>
   <div class="page">
     <PageHead
-      title="数据库浏览器"
-      subtitle="只读浏览 SQLite 文件、PostgreSQL 与 MySQL 库；写语句会被连接本身拒绝。"
+      title="数据库浏览器（实验）"
+      subtitle="只读浏览 SQLite 文件、PostgreSQL 与 MySQL 库；写语句会被连接本身拒绝。PostgreSQL / MySQL 尚未在真实实例上验证。"
     />
 
     <div class="card conn-card">
@@ -40,7 +40,7 @@
         <DbConnectionHistory ref="historyRef" @fill="fillFromHistory" @error="error = $event" />
       </div>
       <div class="conn-hint">
-        连接固定为只读，PostgreSQL / MySQL 语句超时 15 秒，请使用有查询权限的账号。MySQL
+        连接固定为只读，三种数据库语句超时 15 秒，请使用有查询权限的账号。MySQL
         可省略连接串末尾的库名，连接后默认打开第一个库并可在右上角切换；需要 TLS 时在地址后加
         ?require_ssl=true。
       </div>
@@ -68,7 +68,7 @@
           <div class="editor-head">
             <span class="session-label" :title="session.label">
               {{ session.label }}
-              <span class="badge">{{ kindLabel(session.kind) }}</span>
+              <span class="badge">{{ dbKindLabel(session.kind) }}</span>
             </span>
             <div class="editor-actions">
               <DbDatabaseSelect
@@ -109,6 +109,8 @@ import DbDatabaseSelect from "../components/db/DbDatabaseSelect.vue";
 import DbSchemaPanel from "../components/db/DbSchemaPanel.vue";
 import DbResultTable from "../components/db/DbResultTable.vue";
 import { useSchemaWidth } from "../composables/useSchemaWidth";
+import { dbKindLabel, selectSql } from "../components/db/sqlText";
+import { createDbSeq } from "../utils/dbSeq";
 import { api } from "../api";
 import type { DbKind, DbQueryResult, DbSessionInfo, DbTable } from "../types";
 
@@ -129,6 +131,8 @@ const { schemaWidth, dragging, startResize } = useSchemaWidth();
 const historyRef = ref<{ refresh: () => Promise<void> } | null>(null);
 const selectedDatabase = ref("");
 const switching = ref(false);
+// 请求序号：open / selectDatabase / query / close 各自递增，过期响应直接丢弃
+const seq = createDbSeq();
 
 const limitOptions = [50, 100, 200, 500].map((value) => ({
   label: `${value} 行`,
@@ -152,6 +156,8 @@ async function pickSqlite(): Promise<void> {
 
 async function connect(): Promise<void> {
   if (connecting.value) return;
+  const token = seq.begin("open");
+  const previousId = session.value?.id ?? "";
   connecting.value = true;
   error.value = "";
   try {
@@ -166,27 +172,35 @@ async function connect(): Promise<void> {
       sqlitePath: kind.value === "sqlite" ? sqlitePath.value.trim() : null,
       connectionString,
     });
+    // 期间已断连或再次连接，本次结果作废
+    if (!seq.isLatest("open", token)) return;
     session.value = info;
     selectedDatabase.value = info.databases.some((db) => db.name === info.label) ? info.label : "";
     result.value = null;
     activeTable.value = "";
+    if (previousId && previousId !== info.id) {
+      // 重连成功后关掉旧会话，避免会话池堆积
+      void api.dbClose(previousId).catch(() => undefined);
+    }
     void historyRef.value?.refresh();
     const first = info.schema.tables[0];
     if (first) useTable(first);
   } catch (e) {
-    error.value = String(e);
+    if (seq.isLatest("open", token)) error.value = String(e);
   } finally {
-    connecting.value = false;
+    if (seq.isLatest("open", token)) connecting.value = false;
   }
 }
 
 async function switchDatabase(database: string): Promise<void> {
   const current = session.value;
-  if (!current || !database || switching.value) return;
+  if (!current || !database) return;
+  const token = seq.begin("selectDatabase");
   switching.value = true;
   error.value = "";
   try {
     const info = await api.dbSelectDatabase(current.id, database);
+    if (!seq.isLatest("selectDatabase", token) || session.value?.id !== current.id) return;
     session.value = info;
     selectedDatabase.value = database;
     result.value = null;
@@ -194,10 +208,11 @@ async function switchDatabase(database: string): Promise<void> {
     const first = info.schema.tables[0];
     if (first) useTable(first);
   } catch (e) {
+    if (!seq.isLatest("selectDatabase", token)) return;
     selectedDatabase.value = current.databases.some((db) => db.name === current.label) ? current.label : "";
     error.value = String(e);
   } finally {
-    switching.value = false;
+    if (seq.isLatest("selectDatabase", token)) switching.value = false;
   }
 }
 
@@ -211,12 +226,21 @@ function fillFromHistory(nextKind: DbKind, connection: string): void {
 async function disconnect(): Promise<void> {
   const current = session.value;
   if (!current) return;
+  // 先作废未返回的开 / 切库 / 查询，避免迟到的响应把会话“复活”
+  seq.begin("close");
+  seq.invalidate("open");
+  seq.invalidate("selectDatabase");
+  seq.invalidate("query");
   session.value = null;
   selectedDatabase.value = "";
   result.value = null;
   activeTable.value = "";
+  connecting.value = false;
+  switching.value = false;
+  running.value = false;
   try {
-    await api.dbClose(current.id);
+    // 页面只维护一个会话，断开时顺手清掉可能残留的旧会话
+    await api.dbCloseAll();
   } catch {
     // 关闭失败不影响界面，进程退出时会回收连接
   }
@@ -224,54 +248,38 @@ async function disconnect(): Promise<void> {
 
 function useTable(table: DbTable): void {
   activeTable.value = table.name;
-  sql.value = selectSql(table);
+  sql.value = selectSql(table, session.value?.kind ?? "");
   void run(0);
-}
-
-function kindLabel(value: DbKind): string {
-  if (value === "sqlite") return "SQLite";
-  return value === "postgres" ? "PostgreSQL" : "MySQL";
-}
-
-function selectSql(table: DbTable): string {
-  const sessionKind = session.value?.kind ?? "";
-  const prefix = table.schema ? `${table.schema}.` : "";
-  const raw = prefix && table.name.startsWith(prefix) ? table.name.slice(prefix.length) : table.name;
-  const target = table.schema && raw !== table.name
-    ? `${quote(table.schema, sessionKind)}.${quote(raw, sessionKind)}`
-    : quote(table.name, sessionKind);
-  return `SELECT * FROM ${target} LIMIT 100`;
-}
-
-function quote(name: string, sessionKind: DbKind | ""): string {
-  if (sessionKind === "mysql") {
-    return `\`${name.replace(/`/g, "``")}\``;
-  }
-  return `"${name.replace(/"/g, '""')}"`;
 }
 
 async function run(offset = 0): Promise<void> {
   const current = session.value;
-  if (!current || running.value) return;
+  if (!current) return;
   const text = sql.value.trim();
   if (!text) {
     error.value = "请输入 SQL";
     return;
   }
+  const token = seq.begin("query");
   running.value = true;
   error.value = "";
   try {
-    result.value = await api.dbQuery(current.id, text, offset, limit.value);
+    const next = await api.dbQuery(current.id, text, offset, limit.value);
+    // 快速切表 / 切库时只保留最后一次请求的结果
+    if (!seq.isLatest("query", token) || session.value?.id !== current.id) return;
+    result.value = next;
   } catch (e) {
+    if (!seq.isLatest("query", token)) return;
     error.value = String(e);
   } finally {
-    running.value = false;
+    if (seq.isLatest("query", token)) running.value = false;
   }
 }
 
 onBeforeUnmount(() => {
-  const current = session.value;
-  if (current) void api.dbClose(current.id).catch(() => undefined);
+  // 离开页面时关闭全部会话，确保连接不残留
+  seq.invalidateAll();
+  void api.dbCloseAll().catch(() => undefined);
 });
 </script>
 

@@ -13,10 +13,6 @@ use tokio::sync::Mutex;
 use super::sql;
 use crate::models::{DbColumn, DbDatabase, DbQueryResult, DbSchema, DbTable};
 
-const READ_ONLY_KEYWORDS: [&str; 7] = [
-    "select", "with", "values", "show", "describe", "desc", "explain",
-];
-
 #[derive(Clone)]
 pub struct MysqlSession {
     label: Arc<RwLock<String>>,
@@ -100,6 +96,17 @@ impl MysqlSession {
         self.databases.clone()
     }
 
+    /// 主动断开连接：会话被淘汰、超时回收或关闭全部时调用，避免连接堆积。
+    /// 仍有其它引用（例如并发查询正在使用）时不再强断，交给 Drop 关闭 socket。
+    pub async fn shutdown(self) {
+        let Some(mutex) = Arc::into_inner(self.conn) else {
+            return;
+        };
+        if let Err(err) = mutex.into_inner().disconnect().await {
+            eprintln!("[DB] 关闭 MySQL 会话失败: {err}");
+        }
+    }
+
     pub async fn select_database(&self, database: &str) -> Result<DbSchema, String> {
         let database = database.trim();
         if !self.databases.iter().any(|item| item.name == database) {
@@ -122,12 +129,7 @@ impl MysqlSession {
         let started = Instant::now();
         let statement = sql::single_statement(raw)?;
         let keyword = sql::first_keyword(&statement);
-        if !READ_ONLY_KEYWORDS.contains(&keyword.as_str()) {
-            return Err(format!(
-                "[PARAM] MySQL 只读会话不支持 {} 语句",
-                sql::describe(&keyword)
-            ));
-        }
+        sql::ensure_read_only("MySQL", &keyword)?;
 
         let paged = sql::wrappable(&keyword);
         let text = if paged {

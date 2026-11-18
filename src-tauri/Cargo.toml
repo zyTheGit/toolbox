@@ -42,7 +42,7 @@ sha2 = "0.10"
 croner = "4"
 percent-encoding = "2"
 parking_lot = "0.12"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled", "hooks"] }
 mysql_async = { version = "0.37", default-features = false, features = ["default-rustls-ring"] }
 tokio-postgres = "0.7"
 tokio-postgres-rustls = "0.13"

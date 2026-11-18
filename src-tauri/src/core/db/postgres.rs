@@ -72,6 +72,7 @@ impl PostgresSession {
         let started = Instant::now();
         let statement = sql::single_statement(raw)?;
         let keyword = sql::first_keyword(&statement);
+        sql::ensure_read_only("PostgreSQL", &keyword)?;
         let paged = sql::wrappable(&keyword);
         let text = if paged {
             sql::wrap_page(&statement, limit, offset)
@@ -79,11 +80,7 @@ impl PostgresSession {
             statement
         };
 
-        let messages = self
-            .client
-            .simple_query(&text)
-            .await
-            .map_err(|e| format!("[DB] 查询失败: {e}"))?;
+        let messages = self.run_read_only(&text).await?;
 
         let mut columns: Vec<String> = Vec::new();
         let mut all: Vec<Vec<Value>> = Vec::new();
@@ -125,6 +122,21 @@ impl PostgresSession {
             has_more,
             elapsed_ms: started.elapsed().as_millis() as u64,
         })
+    }
+
+    /// 每条查询包在显式只读事务里执行：即使 GUC 被 `set_config` 之类的函数改掉，
+    /// 当前事务仍然是 READ ONLY，写语句依旧被服务器拒绝。
+    async fn run_read_only(&self, text: &str) -> Result<Vec<SimpleQueryMessage>, String> {
+        self.client
+            .batch_execute("BEGIN READ ONLY")
+            .await
+            .map_err(|e| format!("[DB] 开启只读事务失败: {e}"))?;
+        let outcome = self.client.simple_query(text).await;
+        if let Err(err) = self.client.batch_execute("ROLLBACK").await {
+            // 连接已断开时回滚同样会失败，这里只记录，不影响原始错误
+            eprintln!("[DB] 回滚只读事务失败: {err}");
+        }
+        outcome.map_err(|e| format!("[DB] 查询失败: {e}"))
     }
 }
 

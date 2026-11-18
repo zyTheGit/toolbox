@@ -2,12 +2,11 @@
 
 pub mod mysql;
 pub mod postgres;
+pub mod sessions;
 pub mod sql;
 pub mod sqlite;
 
-use std::collections::HashMap;
-
-use parking_lot::Mutex;
+pub use sessions::DbManager;
 
 use crate::models::{DbDatabase, DbQueryResult, DbSchema};
 use mysql::MysqlSession;
@@ -156,36 +155,6 @@ fn truncate_chars(text: &str, max: usize) -> String {
     let mut out: String = text.chars().take(max.saturating_sub(1)).collect();
     out.push('…');
     out
-}
-
-pub struct DbManager {
-    sessions: Mutex<HashMap<String, Session>>,
-}
-
-impl DbManager {
-    pub fn new() -> Self {
-        Self {
-            sessions: Mutex::new(HashMap::new()),
-        }
-    }
-
-    pub fn add(&self, session: Session) -> String {
-        let id = uuid::Uuid::new_v4().to_string();
-        self.sessions.lock().insert(id.clone(), session);
-        id
-    }
-
-    pub fn get(&self, id: &str) -> Result<Session, String> {
-        self.sessions
-            .lock()
-            .get(id)
-            .cloned()
-            .ok_or_else(|| "[PARAM] 数据库会话不存在，请重新连接".to_string())
-    }
-
-    pub fn remove(&self, id: &str) {
-        self.sessions.lock().remove(id);
-    }
 }
 
 #[cfg(test)]

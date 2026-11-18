@@ -100,6 +100,12 @@ pub fn db_close(id: String, state: State<'_, AppState>) -> CmdResult<()> {
 }
 
 #[tauri::command]
+pub fn db_close_all(state: State<'_, AppState>) -> CmdResult<()> {
+    state.db.close_all();
+    Ok(())
+}
+
+#[tauri::command]
 pub fn db_history_list(state: State<'_, AppState>) -> CmdResult<Vec<DbHistoryEntryView>> {
     Ok(state.secrets.list_db_connections())
 }
@@ -122,12 +128,7 @@ pub fn db_history_rename(
 #[tauri::command]
 pub async fn db_pick_sqlite() -> CmdResult<Option<String>> {
     tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .set_title("选择 SQLite 数据库")
-            .add_filter("SQLite", &["db", "sqlite", "sqlite3", "db3"])
-            .add_filter("所有文件", &["*"])
-            .pick_file()
-            .map(|path| path.to_string_lossy().to_string())
+        crate::dialogs::pick_sqlite_file().map(|path| path.to_string_lossy().to_string())
     })
     .await
     .map_err(|e| format!("[TOOL] 打开文件选择器失败: {e}"))
