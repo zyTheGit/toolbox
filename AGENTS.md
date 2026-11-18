@@ -7,7 +7,7 @@
 - 前端：Vue 3 + TypeScript + Naive UI + Vite（`src/`）
 - 后端：Rust + Tauri 2（`src-tauri/`），核心逻辑在 `src-tauri/src/core/` 与 `scheduler/`
 - 目标多端适配（Windows / macOS / Linux）。平台专属代码必须用 `#[cfg(...)]` 隔离，禁止调用未隔离的平台 API；新增功能需考虑跨平台
-- 数据目录 `%APPDATA%\Toolbox`（config/history/jobs/tasks.json、`bin/`、`runs/`）
+- 数据目录：Windows 为 `%APPDATA%\Toolbox`；macOS / Linux 为系统 data_dir 下的 `Toolbox`。跨平台代码以 `AppPaths::resolve` 中的 `app.path().data_dir()?.join("Toolbox")` 为准，禁止硬编码平台路径
 
 ## 常用命令
 
@@ -17,6 +17,8 @@ npm run typecheck      # vue-tsc 前端类型检查
 npm run test           # 前端单测（node --test tests/）
 cargo test --manifest-path src-tauri/Cargo.toml   # Rust 测试
 npm run tauri:build    # release + NSIS；便携版再跑 npm run package:portable
+node scripts/check-version.mjs       # 三处版本号与 tag 一致性
+node scripts/check-file-length.mjs   # 单文件 400 行基线（--update 更新基线）
 ```
 
 改动后至少运行 `npm run typecheck` 与相关测试。
@@ -47,6 +49,7 @@ optimize: 优化大数据查询性能
 
 ## 发版流程
 
+- 发版步骤以 `docs/RELEASE_CHECKLIST.md` 为准（构建 → 安装冒烟 → push → CI → tag → draft → 填写描述 → 发布）。
 - 一个版本对应一个 tag，通过 GitHub Actions 发版：推送新 tag 即触发。若 `.github/workflows` 中的发版 workflow 不存在，发版前需创建（tag 触发、多平台构建）。
 - 推送 tag 前必须先在本地验证构建通过（`npm run tauri:build`），未通过不得推送发版 tag。
 - Release 描述必须分节写清：**新增**什么、**改动**什么、**优化**什么；大版本更新必须说明是否有兼容性问题（配置迁移、数据格式、命令行参数等）。

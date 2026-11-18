@@ -1,8 +1,8 @@
 <template>
   <div class="page">
     <PageHead
-      title="AI 工具"
-      subtitle="多模型并行对比调试；凭据加密保存在本机，请求只发送到你配置的服务商。"
+      title="AI 工具（实验）"
+      subtitle="多模型并行对比调试；凭据保存在本机，请求只发送到你配置的服务商。本机仅验证页面流程，真实 LLM 调用需自行配置凭据后验证。"
     />
 
     <n-tabs v-model:value="tab" type="segment" :theme-overrides="tabsTheme">
