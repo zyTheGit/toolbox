@@ -29,6 +29,7 @@ interface StoreState {
   secretEntries: SecretEntryView[];
   secretEntriesLoaded: boolean;
   warnings: string[];
+  configRevision: number;
   toolProgress: Record<string, ToolProgress>;
   eventsOk: boolean;
   eventsError: string;
@@ -50,6 +51,7 @@ export const store = reactive<StoreState>({
   secretEntries: [],
   secretEntriesLoaded: false,
   warnings: [],
+  configRevision: 0,
   toolProgress: {},
   eventsOk: false,
   eventsError: "",
@@ -67,6 +69,7 @@ export function applySnapshot(snapshot: AppSnapshot): void {
   store.tasksPaused = snapshot.tasksPaused;
   store.secrets = snapshot.secrets;
   store.warnings = snapshot.warnings ?? [];
+  store.configRevision = snapshot.configRevision ?? 0;
   store.ready = true;
   store.error = "";
 }

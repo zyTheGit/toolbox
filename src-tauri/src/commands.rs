@@ -1,27 +1,40 @@
 pub mod ai;
+pub mod backup;
 pub mod db;
+pub mod download;
 pub mod secrets;
+pub mod task;
 
 use std::path::PathBuf;
 
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use crate::core;
+use crate::core::config::ConfigSection;
 use crate::core::secrets::SecretPatch;
 use crate::models::{
-    AppConfig, AppSnapshot, AutostartStatus, ConfigResult, DownloadRequest, HistoryPage,
-    HistoryQuery, Job, Task, TaskInput, TaskRun, ToolInstallResult, ToolsStatus, TranslateRequest,
-    TranslateResult,
+    AppConfig, AppSnapshot, AutostartStatus, ConfigConflictError, ConfigResult, ConfigSaveError,
+    HistoryPage, HistoryQuery, ToolInstallResult, ToolsStatus, TranslateRequest, TranslateResult,
 };
 use crate::scheduler::autostart;
 use crate::state::{push_warning, AppState};
 
 type CmdResult<T> = Result<T, String>;
+type ConfigCmdResult = Result<ConfigResult, ConfigSaveError>;
 
 #[tauri::command]
 pub async fn get_app_snapshot(state: tauri::State<'_, AppState>) -> CmdResult<AppSnapshot> {
     let config = state.config();
     let view = state.view_config();
+    // 备份恢复后的一次性提示：读取即删除，并并入 warnings 通道展示。
+    let restore_notice = state.take_restore_notice();
+    if let Some(notice) = restore_notice.clone() {
+        push_warning(&state.warnings, notice);
+    }
+    // 密钥迁移 / 权限收紧的一次性提示，同样在首次快照展示。
+    if let Some(notice) = state.secrets.take_migration_notice() {
+        push_warning(&state.warnings, notice);
+    }
     let for_tools = config.clone();
     let paths = state.paths.clone();
     let tools = tauri::async_runtime::spawn_blocking(move || {
@@ -42,36 +55,60 @@ pub async fn get_app_snapshot(state: tauri::State<'_, AppState>) -> CmdResult<Ap
         secrets: state.secrets.status(),
         warnings: state.warnings(),
         tools,
+        config_revision: state.config_revision(),
+        restore_notice,
     })
 }
 
+/// 分段保存配置。`base_revision` 与磁盘版本不一致时返回结构化冲突，
+/// 由前端在“保留我的 / 用磁盘的”之间选择，绝不静默整包覆盖。
 #[tauri::command]
 pub async fn save_config(
     app: AppHandle,
-    mut config: AppConfig,
+    config: AppConfig,
     secret_patch: Option<SecretPatch>,
+    section: Option<String>,
+    base_revision: Option<u64>,
     state: tauri::State<'_, AppState>,
-) -> CmdResult<ConfigResult> {
-    core::config::normalize(&mut config, &state.paths);
-    core::config::validate(&config)?;
+) -> ConfigCmdResult {
+    state.ensure_writable()?;
+    let section = ConfigSection::parse(section.as_deref())?;
+
+    let save_guard = state.config_save.lock();
+    if let Some(base) = base_revision {
+        let current = state.config_revision();
+        if base != current {
+            return Err(ConfigSaveError::Conflict(ConfigConflictError::new(
+                state.view_config(),
+                current,
+            )));
+        }
+    }
+
+    let current = state.config.read().clone();
+    let mut merged = core::config::merge_section(&current, config, section);
+    core::config::normalize(&mut merged, &state.paths);
+    core::config::validate(&merged)?;
 
     let previous = state.config();
-    core::quick::apply(&app, &config)?;
+    core::quick::apply(&app, &merged)?;
 
     let stored = (|| -> Result<(), String> {
         // Keys embedded in the payload (older UI) move into the secret store.
-        state.secrets.migrate_inline(&mut config)?;
+        state.secrets.migrate_inline(&mut merged)?;
         if let Some(patch) = secret_patch.as_ref() {
             state.secrets.apply_patch(patch)?;
         }
-        core::config::save(&state.paths, &config)
+        core::config::save(&state.paths, &merged)
     })();
 
     if let Err(err) = stored {
         let _ = core::quick::apply(&app, &previous);
-        return Err(err);
+        return Err(err.into());
     }
-    *state.config.write() = config;
+    *state.config.write() = merged;
+    let revision = state.bump_config_revision();
+    drop(save_guard);
 
     let realized = state.config();
     let for_tools = realized.clone();
@@ -87,6 +124,7 @@ pub async fn save_config(
         config: state.view_config(),
         secrets: state.secrets.status(),
         tools,
+        config_revision: revision,
     })
 }
 
@@ -145,9 +183,7 @@ pub async fn open_folder(
 #[tauri::command]
 pub async fn pick_folder() -> CmdResult<Option<String>> {
     tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .pick_folder()
-            .map(|path| path.to_string_lossy().to_string())
+        crate::dialogs::pick_folder().map(|path| path.to_string_lossy().to_string())
     })
     .await
     .map_err(|e| format!("[TOOL] 打开文件选择器失败: {e}"))
@@ -211,90 +247,6 @@ pub fn history_set_favorite(
 }
 
 #[tauri::command]
-pub fn download_enqueue(
-    request: DownloadRequest,
-    state: tauri::State<'_, AppState>,
-) -> CmdResult<Vec<Job>> {
-    let config = state.config();
-    state.downloader.enqueue(&request, &config)
-}
-
-#[tauri::command]
-pub fn job_cancel(id: String, state: tauri::State<'_, AppState>) -> CmdResult<()> {
-    state.downloader.cancel(&id)
-}
-
-#[tauri::command]
-pub fn job_retry(id: String, state: tauri::State<'_, AppState>) -> CmdResult<Job> {
-    state.downloader.retry(&id)
-}
-
-#[tauri::command]
-pub fn job_remove(id: String, state: tauri::State<'_, AppState>) -> CmdResult<()> {
-    state.downloader.remove(&id)
-}
-
-#[tauri::command]
-pub fn job_open(id: String, state: tauri::State<'_, AppState>) -> CmdResult<String> {
-    state.downloader.open(&id)
-}
-
-#[tauri::command]
-pub fn tasks_list(state: tauri::State<'_, AppState>) -> CmdResult<Vec<Task>> {
-    Ok(state.scheduler.list())
-}
-
-#[tauri::command]
-pub fn task_create(input: TaskInput, state: tauri::State<'_, AppState>) -> CmdResult<Task> {
-    state.scheduler.create(input)
-}
-
-#[tauri::command]
-pub fn task_update(
-    id: String,
-    input: TaskInput,
-    state: tauri::State<'_, AppState>,
-) -> CmdResult<Task> {
-    state.scheduler.update(&id, input)
-}
-
-#[tauri::command]
-pub fn task_delete(id: String, state: tauri::State<'_, AppState>) -> CmdResult<()> {
-    state.scheduler.delete(&id)
-}
-
-#[tauri::command]
-pub fn task_run_now(id: String, state: tauri::State<'_, AppState>) -> CmdResult<TaskRun> {
-    state.scheduler.run_now(&id)
-}
-
-#[tauri::command]
-pub fn task_cancel(id: String, state: tauri::State<'_, AppState>) -> CmdResult<()> {
-    state.scheduler.cancel(&id)
-}
-
-#[tauri::command]
-pub fn task_runs(task_id: String, state: tauri::State<'_, AppState>) -> CmdResult<Vec<TaskRun>> {
-    state.scheduler.runs(&task_id)
-}
-
-#[tauri::command]
-pub fn tasks_set_paused(
-    paused: bool,
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> CmdResult<bool> {
-    let value = state.scheduler.set_paused(paused);
-    app.emit("tasks-paused", value).map_err(|e| e.to_string())?;
-    Ok(value)
-}
-
-#[tauri::command]
-pub fn cron_preview(expr: String, state: tauri::State<'_, AppState>) -> CmdResult<Vec<String>> {
-    state.scheduler.preview(&expr)
-}
-
-#[tauri::command]
 pub fn autostart_get() -> CmdResult<AutostartStatus> {
     Ok(autostart::status())
 }
@@ -308,57 +260,4 @@ pub fn autostart_set(enabled: bool) -> CmdResult<AutostartStatus> {
 #[tauri::command]
 pub fn get_data_dir(state: tauri::State<'_, AppState>) -> CmdResult<String> {
     Ok(state.paths.data_dir.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-pub async fn data_export(state: tauri::State<'_, AppState>) -> CmdResult<String> {
-    let picked = tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .set_title("导出 Toolbox 备份")
-            .set_file_name(format!(
-                "toolbox-backup-{}.json",
-                chrono::Local::now().format("%Y%m%d-%H%M%S")
-            ))
-            .add_filter("JSON", &["json"])
-            .save_file()
-    })
-    .await
-    .map_err(|e| format!("[TOOL] 打开保存对话框失败: {e}"))?;
-    let Some(path) = picked else {
-        return Ok(String::new());
-    };
-    let path = if path.extension().is_none() {
-        path.with_extension("json")
-    } else {
-        path
-    };
-    core::backup::export_to(&path, &state)
-}
-
-/// Writes the restored files and restarts: in-memory config/history/tasks are
-/// stale after an import, and letting them live on would overwrite the restore.
-#[tauri::command]
-pub async fn data_import(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> CmdResult<String> {
-    let picked = tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .set_title("选择 Toolbox 备份")
-            .add_filter("JSON", &["json"])
-            .pick_file()
-    })
-    .await
-    .map_err(|e| format!("[TOOL] 打开文件选择器失败: {e}"))?;
-    let Some(path) = picked else {
-        return Ok(String::new());
-    };
-
-    let summary = core::backup::import_from(&path, &state)?;
-    let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(800));
-        handle.restart();
-    });
-    Ok(format!("{summary}，应用即将重启"))
 }

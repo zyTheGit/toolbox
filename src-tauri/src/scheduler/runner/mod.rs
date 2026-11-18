@@ -176,10 +176,10 @@ impl Scheduler {
                     task.last_error = "应用退出导致中断".into();
                 }
             }
-        }
-        let snapshot = self.core.tasks.lock().clone();
-        if let Err(err) = self.core.store.save(&snapshot) {
-            push_warning(&self.core.warnings, err);
+            // 持锁写盘，避免与 create / update / delete 交错后旧快照覆盖新状态。
+            if let Err(err) = self.core.store.save(tasks.as_slice()) {
+                push_warning(&self.core.warnings, err);
+            }
         }
     }
 
@@ -187,6 +187,17 @@ impl Scheduler {
         let mut tasks = self.core.tasks.lock().clone();
         tasks.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         tasks
+    }
+
+    /// 从磁盘重新载入任务到内存（备份恢复后调用）。
+    ///
+    /// 只替换内存快照，不回写磁盘；恢复前已 `shutdown` 停写，避免 tick 用
+    /// 旧数据覆盖刚恢复的文件。恢复成功后保持停止，直到应用重启。
+    pub fn reload_from_disk(&self) -> Result<(), String> {
+        let tasks = self.core.store.load()?;
+        *self.core.tasks.lock() = tasks;
+        self.core.emit_tasks();
+        Ok(())
     }
 
     pub fn create(&self, input: TaskInput) -> Result<Task, String> {
@@ -210,6 +221,7 @@ impl Scheduler {
             payload: fields.payload,
             created_at: now.clone(),
             updated_at: now,
+            revision: 1,
             ..Task::default()
         };
         task.next_run = if task.enabled {
@@ -254,6 +266,7 @@ impl Scheduler {
                 None
             };
             task.updated_at = now_string();
+            task.revision = task.revision.wrapping_add(1);
             task.clone()
         };
         if let Err(err) = self.core.store.save(&tasks) {

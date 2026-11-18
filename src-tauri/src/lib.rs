@@ -1,6 +1,7 @@
 mod commands;
 #[doc(hidden)]
 pub mod core;
+mod dialogs;
 #[doc(hidden)]
 pub mod models;
 mod scheduler;
@@ -75,17 +76,24 @@ pub fn run() {
                 warnings.clone(),
             ));
 
+            // 数据库会话池：上限 8 个，空闲 30 分钟由后台线程回收
+            let db = Arc::new(core::db::DbManager::new());
+            db.start_reaper();
+
             app.manage(AppState {
                 paths,
                 config: shared,
                 secrets: Arc::new(secrets),
                 llm_usage: Arc::new(llm_usage),
-                db: Arc::new(core::db::DbManager::new()),
+                db,
                 warnings,
                 history,
                 downloader,
                 scheduler,
                 installing: Mutex::new(HashSet::new()),
+                restoring: std::sync::atomic::AtomicBool::new(false),
+                config_revision: std::sync::atomic::AtomicU64::new(0),
+                config_save: Mutex::new(()),
             });
 
             let state = app.state::<AppState>();
@@ -128,25 +136,26 @@ pub fn run() {
             commands::history_delete,
             commands::history_clear,
             commands::history_set_favorite,
-            commands::download_enqueue,
-            commands::job_cancel,
-            commands::job_retry,
-            commands::job_remove,
-            commands::job_open,
-            commands::tasks_list,
-            commands::task_create,
-            commands::task_update,
-            commands::task_delete,
-            commands::task_run_now,
-            commands::task_cancel,
-            commands::task_runs,
-            commands::tasks_set_paused,
-            commands::cron_preview,
+            commands::download::download_enqueue,
+            commands::download::job_cancel,
+            commands::download::job_retry,
+            commands::download::job_remove,
+            commands::download::job_open,
+            commands::task::tasks_list,
+            commands::task::task_create,
+            commands::task::task_update,
+            commands::task::task_delete,
+            commands::task::task_run_now,
+            commands::task::task_cancel,
+            commands::task::task_runs,
+            commands::task::tasks_set_paused,
+            commands::task::cron_preview,
             commands::autostart_get,
             commands::autostart_set,
             commands::get_data_dir,
-            commands::data_export,
-            commands::data_import,
+            commands::backup::data_export,
+            commands::backup::data_import,
+            commands::backup::restart_app,
             commands::secrets::secrets_list,
             commands::secrets::secret_save,
             commands::secrets::secret_delete,
@@ -158,6 +167,7 @@ pub fn run() {
             commands::db::db_select_database,
             commands::db::db_query,
             commands::db::db_close,
+            commands::db::db_close_all,
             commands::db::db_history_list,
             commands::db::db_history_reveal,
             commands::db::db_history_rename,
@@ -222,17 +232,16 @@ fn show_main(app: &AppHandle) {
 
 fn quit_app(app: &AppHandle) {
     let state = app.state::<AppState>();
+    #[cfg(not(test))]
     let active = state.downloader.active_count() + state.scheduler.active_count();
-    if active > 0 {
-        let confirmed = rfd::MessageDialog::new()
-            .set_level(rfd::MessageLevel::Warning)
-            .set_title("退出 Toolbox")
-            .set_description(format!("有 {active} 个任务正在执行，退出会终止它们。确定退出？"))
-            .set_buttons(rfd::MessageButtons::YesNo)
-            .show();
-        if !matches!(confirmed, rfd::MessageDialogResult::Yes) {
-            return;
-        }
+    #[cfg(not(test))]
+    if active > 0
+        && !crate::dialogs::confirm(
+            "退出 Toolbox",
+            &format!("有 {active} 个任务正在执行，退出会终止它们。确定退出？"),
+        )
+    {
+        return;
     }
     state.scheduler.shutdown();
     state.downloader.shutdown();

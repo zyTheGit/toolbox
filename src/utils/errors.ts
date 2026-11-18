@@ -30,6 +30,10 @@ const PATTERN = /^\[([A-Z_]+)\]\s*/;
 export function errorText(err: unknown): string {
   if (typeof err === "string") return err;
   if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
   return "操作失败，请稍后重试";
 }
 

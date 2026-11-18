@@ -75,3 +75,52 @@ impl TaskStore {
         Some(self.runs_dir.join(format!("{task_id}.json")))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::TaskPayload;
+
+    fn temp_paths() -> AppPaths {
+        AppPaths::from_data_dir(
+            std::env::temp_dir().join(format!("toolbox-task-reload-{}", uuid::Uuid::new_v4())),
+        )
+    }
+
+    /// 备份恢复后的重载路径：磁盘内容被替换后，store 必须读回新任务，
+    /// 且不得把内存旧数据写回。
+    #[test]
+    fn reload_reads_restored_tasks_without_writing() {
+        let paths = temp_paths();
+        std::fs::create_dir_all(&paths.data_dir).unwrap();
+        let store = TaskStore::new(&paths);
+
+        let old = Task {
+            id: "old".into(),
+            name: "旧任务".into(),
+            ..Task::default()
+        };
+        store.save(&[old]).unwrap();
+
+        let restored = Task {
+            id: "restored".into(),
+            name: "来自备份的命令任务".into(),
+            task_type: "command".into(),
+            enabled: false,
+            payload: TaskPayload {
+                command: "echo hello".into(),
+                ..TaskPayload::default()
+            },
+            ..Task::default()
+        };
+        persist::save_json(&paths.tasks_file, &[restored.clone()]).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, "restored");
+        assert!(!loaded[0].enabled);
+
+        let on_disk: Vec<Task> = persist::load_json(&paths.tasks_file).unwrap().unwrap();
+        assert_eq!(on_disk[0].id, "restored");
+    }
+}

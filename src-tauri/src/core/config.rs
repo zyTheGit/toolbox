@@ -35,6 +35,52 @@ pub fn clear_secrets(config: &mut AppConfig) {
     config.translate.youdao.app_secret.clear();
 }
 
+/// 保存范围：不同页面只提交自己负责的字段。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConfigSection {
+    /// 除 `llm` 外的全部设置。
+    Settings,
+    /// 仅 `llm`。
+    Llm,
+    /// 仅 `security.allow_commands`（任务弹窗开启命令执行时使用）。
+    Security,
+    /// 整包替换，仅用于兼容旧调用。
+    All,
+}
+
+impl ConfigSection {
+    pub fn parse(value: Option<&str>) -> Result<Self, String> {
+        match value.unwrap_or("all").trim() {
+            "settings" => Ok(Self::Settings),
+            "llm" => Ok(Self::Llm),
+            "security" => Ok(Self::Security),
+            "all" => Ok(Self::All),
+            other => Err(format!("[PARAM] 未知配置保存范围: {other}")),
+        }
+    }
+}
+
+/// 按范围合并配置：未提交的字段保留当前值，避免跨页旧草稿覆盖。
+pub fn merge_section(current: &AppConfig, incoming: AppConfig, section: ConfigSection) -> AppConfig {
+    match section {
+        ConfigSection::All => incoming,
+        ConfigSection::Settings => AppConfig {
+            llm: current.llm.clone(),
+            ..incoming
+        },
+        ConfigSection::Llm => AppConfig {
+            llm: incoming.llm,
+            ..current.clone()
+        },
+        ConfigSection::Security => AppConfig {
+            security: crate::models::SecurityConfig {
+                allow_commands: incoming.security.allow_commands,
+            },
+            ..current.clone()
+        },
+    }
+}
+
 pub fn normalize(config: &mut AppConfig, paths: &AppPaths) {
     if config.download_dir.trim().is_empty() {
         config.download_dir = paths.downloads_dir.to_string_lossy().to_string();
@@ -223,5 +269,59 @@ mod tests {
         normalize(&mut config, &test_paths());
         config.schema_version = CONFIG_SCHEMA_VERSION + 1;
         assert!(validate(&config).is_err());
+    }
+
+    #[test]
+    fn settings_section_preserves_current_llm() {
+        let current = AppConfig::default();
+        let mut incoming = current.clone();
+        incoming.download_dir = "/tmp/new-downloads".into();
+        incoming.llm.providers[0].model = "stale-model".into();
+
+        let merged = merge_section(&current, incoming, ConfigSection::Settings);
+        assert_eq!(merged.download_dir, "/tmp/new-downloads");
+        assert_eq!(
+            merged.llm.providers[0].model,
+            current.llm.providers[0].model,
+            "设置页不得覆盖 AI 页保存的模型配置"
+        );
+    }
+
+    #[test]
+    fn llm_section_preserves_other_settings() {
+        let current = AppConfig::default();
+        let mut incoming = current.clone();
+        incoming.download_dir = "/tmp/stale".into();
+        incoming.llm.providers[0].model = "new-model".into();
+
+        let merged = merge_section(&current, incoming, ConfigSection::Llm);
+        assert_eq!(merged.download_dir, current.download_dir);
+        assert_eq!(merged.llm.providers[0].model, "new-model");
+    }
+
+    #[test]
+    fn security_section_only_changes_command_switch() {
+        let mut current = AppConfig::default();
+        current.security.allow_commands = false;
+        current.download_dir = "/tmp/current".into();
+        current.llm.providers[0].model = "current-model".into();
+        let mut incoming = current.clone();
+        incoming.security.allow_commands = true;
+        incoming.download_dir = "/tmp/stale".into();
+        incoming.llm.providers[0].model = "stale-model".into();
+
+        let merged = merge_section(&current, incoming, ConfigSection::Security);
+        assert!(merged.security.allow_commands);
+        assert_eq!(merged.download_dir, "/tmp/current");
+        assert_eq!(merged.llm.providers[0].model, "current-model");
+    }
+
+    #[test]
+    fn section_names_are_strict() {
+        assert_eq!(ConfigSection::parse(Some("settings")).unwrap(), ConfigSection::Settings);
+        assert_eq!(ConfigSection::parse(Some("llm")).unwrap(), ConfigSection::Llm);
+        assert_eq!(ConfigSection::parse(Some("security")).unwrap(), ConfigSection::Security);
+        assert_eq!(ConfigSection::parse(None).unwrap(), ConfigSection::All);
+        assert!(ConfigSection::parse(Some("unknown")).is_err());
     }
 }

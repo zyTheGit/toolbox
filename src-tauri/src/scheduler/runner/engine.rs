@@ -21,9 +21,7 @@ const MAX_COMMAND_QUEUE: usize = 5;
 const DUE_GRACE_SECONDS: i64 = 90;
 
 pub(super) fn tick(core: &Arc<Core>) {
-    if core.paused.load(Ordering::SeqCst) || core.stopped.load(Ordering::SeqCst) {
-        return;
-    }
+    if core.paused.load(Ordering::SeqCst) || core.stopped.load(Ordering::SeqCst) { return; }
     let now = Local::now();
     let now_naive = now.naive_local();
     let started_at = now.format(NOW_FORMAT).to_string();
@@ -147,11 +145,17 @@ impl Core {
     }
 
     pub(super) fn save_and_emit_tasks(&self) {
-        let tasks = self.tasks.lock().clone();
-        if let Err(err) = self.store.save(&tasks) {
+        // 持 tasks 锁写盘：锁外旧快照会覆盖并发 create / delete / finish_run 的新状态。
+        let tasks = self.tasks.lock();
+        if self.stopped.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Err(err) = self.store.save(tasks.as_slice()) {
             push_warning(&self.warnings, err);
         }
-        let _ = self.app.emit("tasks-updated", tasks);
+        let snapshot = (*tasks).clone();
+        drop(tasks);
+        let _ = self.app.emit("tasks-updated", snapshot);
     }
 
     pub(super) fn emit_run(&self, run: &TaskRun) {
@@ -160,12 +164,7 @@ impl Core {
 
     fn notify(&self, title: &str, body: &str) -> Result<(), String> {
         use tauri_plugin_notification::NotificationExt;
-        self.app
-            .notification()
-            .builder()
-            .title(title)
-            .body(body)
-            .show()
+        self.app.notification().builder().title(title).body(body).show()
             .map_err(|err| err.to_string())
     }
 
@@ -291,15 +290,8 @@ async fn execute_reminder(core: &Arc<Core>, task: &Task) -> ExecOutcome {
             job_id: String::new(),
         },
         Err(err) => {
-            let dialog_title = title;
-            let dialog_body = body.clone();
-            std::thread::spawn(move || {
-                let _ = rfd::MessageDialog::new()
-                    .set_level(rfd::MessageLevel::Info)
-                    .set_title(&dialog_title)
-                    .set_description(&dialog_body)
-                    .show();
-            });
+            #[cfg(not(test))]
+            crate::dialogs::info_later(title, &body);
             ExecOutcome {
                 status: "success",
                 exit_code: None,

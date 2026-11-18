@@ -59,6 +59,9 @@ pub struct Task {
     pub last_job_id: String,
     pub running: bool,
     pub next_run: Option<String>,
+    /// 任务版本号，用于并发写入的期望版本校验（0 表示尚未启用）。
+    #[serde(default)]
+    pub revision: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

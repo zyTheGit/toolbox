@@ -166,6 +166,7 @@ import {
 import { api } from "../../api";
 import { loadSecretEntries, store } from "../../store";
 import { describeError } from "../../utils/errors";
+import { useLlmConfigSave } from "../../composables/useLlmConfigSave";
 import {
   cloneLlmConfig,
   missingVariables,
@@ -173,7 +174,6 @@ import {
   templateVariables,
 } from "../../utils/llm";
 import type {
-  AppConfig,
   LlmConfig,
   LlmResponse,
   LlmUsageSummary,
@@ -186,6 +186,7 @@ import LlmUsagePanel from "./LlmUsagePanel.vue";
 const message = useMessage();
 
 const draft = ref<LlmConfig>(cloneLlmConfig(store.config?.llm));
+const { saving, save: saveConfig } = useLlmConfigSave(draft);
 const selectedIds = ref<string[]>([]);
 const systemPrompt = ref("");
 const promptText = ref("");
@@ -195,7 +196,6 @@ const temperature = ref<number | null>(null);
 const maxTokens = ref<number | null>(null);
 const results = ref<LlmResponse[]>([]);
 const running = ref(false);
-const saving = ref(false);
 const usage = ref<LlmUsageSummary | null>(null);
 const usageLoading = ref(false);
 const usageDays = 7;
@@ -287,26 +287,6 @@ async function run(): Promise<void> {
     message.error(`请求失败：${describeError(err)}`);
   } finally {
     running.value = false;
-  }
-}
-
-async function saveConfig(): Promise<void> {
-  if (!store.config || saving.value) return;
-  const payload = JSON.parse(JSON.stringify(store.config)) as AppConfig;
-  payload.llm = JSON.parse(JSON.stringify(draft.value));
-  saving.value = true;
-  try {
-    const result = await api.saveConfig(payload);
-    store.config = result.config;
-    store.tools = result.tools;
-    store.providers = result.providers;
-    store.secrets = result.secrets;
-    draft.value = cloneLlmConfig(result.config.llm);
-    message.success("AI 配置已保存");
-  } catch (err) {
-    message.error(`保存失败：${describeError(err)}`);
-  } finally {
-    saving.value = false;
   }
 }
 

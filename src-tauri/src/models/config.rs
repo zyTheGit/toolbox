@@ -190,3 +190,38 @@ pub struct AppConfig {
     #[serde(default)]
     pub llm: LlmConfig,
 }
+
+/// 保存配置时版本不一致：携带磁盘上的最新配置，供前端二选一。
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigConflictError {
+    pub code: String,
+    pub message: String,
+    pub config: AppConfig,
+    pub config_revision: u64,
+}
+
+impl ConfigConflictError {
+    pub fn new(config: AppConfig, config_revision: u64) -> Self {
+        Self {
+            code: "CONFLICT".into(),
+            message: "配置已被其他页面修改。请选择保留当前编辑，或改用磁盘上的最新配置。".into(),
+            config,
+            config_revision,
+        }
+    }
+}
+
+/// 配置保存错误：冲突返回结构化数据，其余保持原来的字符串错误。
+#[derive(Serialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum ConfigSaveError {
+    Conflict(ConfigConflictError),
+    Message(String),
+}
+
+impl From<String> for ConfigSaveError {
+    fn from(value: String) -> Self {
+        Self::Message(value)
+    }
+}

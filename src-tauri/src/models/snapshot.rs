@@ -31,6 +31,12 @@ pub struct AppSnapshot {
     pub providers: Vec<ProviderInfo>,
     pub autostart: AutostartStatus,
     pub tasks_paused: bool,
+    /// 配置版本号，用于保存前的期望版本校验（0 表示尚未启用）。
+    #[serde(default)]
+    pub config_revision: u64,
+    /// 备份恢复后的首次提示（启动时读取一次后删除），提醒用户检查命令任务。
+    #[serde(default)]
+    pub restore_notice: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -40,4 +46,7 @@ pub struct ConfigResult {
     pub secrets: SecretStatus,
     pub tools: ToolsStatus,
     pub providers: Vec<ProviderInfo>,
+    /// 保存成功后的配置版本号（0 表示尚未启用）。
+    #[serde(default)]
+    pub config_revision: u64,
 }

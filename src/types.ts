@@ -5,9 +5,7 @@ export type ProviderId =
   | "deepl"
   | "baidu"
   | "youdao";
-
 export type Direction = "auto" | "zh2en" | "en2zh";
-
 export type JobStatus =
   | "queued"
   | "running"
@@ -15,11 +13,8 @@ export type JobStatus =
   | "failed"
   | "canceled"
   | "interrupted";
-
 export type TaskType = "command" | "reminder";
-
 export type ScheduleKind = "cron" | "once";
-
 export type TaskStatus =
   | ""
   | "running"
@@ -28,28 +23,23 @@ export type TaskStatus =
   | "canceled"
   | "interrupted"
   | "skipped";
-
 export interface ToolStatus {
   ok: boolean;
   path: string;
   version: string;
 }
-
 export interface ToolsStatus {
   ytdlp: ToolStatus;
   ffmpeg: ToolStatus;
 }
-
 export interface ToolPaths {
   ytdlp: string;
   ffmpeg: string;
 }
-
 export interface StartupConfig {
   startMinimized: boolean;
   delaySeconds: number;
 }
-
 export interface OpenAiConfig {
   baseUrl: string;
   apiKey: string;
@@ -361,6 +351,8 @@ export interface Job {
   createdAt: string;
   startedAt: string;
   finishedAt: string;
+  /** 是否在内存中持有下载凭据（不落盘，默认 false）。 */
+  hasCredentials?: boolean;
 }
 
 export interface DownloadRequest {
@@ -407,6 +399,8 @@ export interface Task {
   lastJobId: string;
   running: boolean;
   nextRun: string | null;
+  /** 任务版本号，用于并发写入的期望版本校验（0 表示尚未启用）。 */
+  revision?: number;
 }
 
 export interface TaskInput {
@@ -434,11 +428,14 @@ export interface TaskRun {
   command: string;
 }
 
+/** 密钥平台保护级别：Windows=DPAPI，Unix=仅文件权限（等同明文），未知=unknown。 */
+export type SecretProtection = "dpapi" | "file-permissions" | "unknown";
 export interface SecretStatus {
   openai: boolean;
   deepl: boolean;
   baidu: boolean;
   youdao: boolean;
+  protection?: SecretProtection;
 }
 
 export interface SecretPatch {
@@ -447,7 +444,6 @@ export interface SecretPatch {
   baiduSecretKey?: string | null;
   youdaoAppSecret?: string | null;
 }
-
 export interface AppSnapshot {
   version: string;
   platform: string;
@@ -460,11 +456,23 @@ export interface AppSnapshot {
   tasksPaused: boolean;
   secrets: SecretStatus;
   warnings: string[];
+  /** 配置版本号，用于保存前的期望版本校验（0 表示尚未启用）。 */
+  configRevision?: number;
+  /** 备份恢复后的首次提示，启动时读取一次后由后端删除。 */
+  restoreNotice?: string | null;
 }
-
+export interface ImportOutcome {
+  restoredConfig: boolean; restoredHistory: number; restoredTasks: number; restoredJobs: number;
+  disabledCommandTasks: number; backupPath: string; restartRequired: boolean;
+}
+export interface JobRetryRequest {
+  referer?: string; cookiesBrowser?: string; proxy?: string; extraArgs?: string; quality?: string; threads?: number;
+}
 export interface ConfigResult {
   config: AppConfig;
   tools: ToolsStatus;
   providers: ProviderInfo[];
   secrets: SecretStatus;
+  /** 保存成功后的配置版本号，前端用它作为下一次保存的基准。 */
+  configRevision: number;
 }

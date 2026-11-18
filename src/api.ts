@@ -13,7 +13,9 @@ import type {
   DownloadRequest,
   HistoryPage,
   HistoryQuery,
+  ImportOutcome,
   Job,
+  JobRetryRequest,
   LlmRequest,
   LlmResponse,
   LlmUsageSummary,
@@ -32,8 +34,18 @@ import type {
 
 export const api = {
   snapshot: () => invoke<AppSnapshot>("get_app_snapshot"),
-  saveConfig: (config: AppConfig, secretPatch?: SecretPatch | null) =>
-    invoke<ConfigResult>("save_config", { config, secretPatch: secretPatch ?? null }),
+  saveConfig: (
+    config: AppConfig,
+    secretPatch?: SecretPatch | null,
+    section: "settings" | "llm" | "security" | "all" = "all",
+    baseRevision?: number | null,
+  ) =>
+    invoke<ConfigResult>("save_config", {
+      config,
+      secretPatch: secretPatch ?? null,
+      section,
+      baseRevision: baseRevision ?? null,
+    }),
   getTools: (force = false) => invoke<ToolsStatus>("get_tools", { force }),
   installTool: (tool: string) => invoke<ToolInstallResult>("install_tool", { tool }),
   openFolder: (path?: string) => invoke<string>("open_folder", { path: path ?? null }),
@@ -46,7 +58,8 @@ export const api = {
     invoke<void>("history_set_favorite", { id, favorite }),
   downloadEnqueue: (request: DownloadRequest) => invoke<Job[]>("download_enqueue", { request }),
   jobCancel: (id: string) => invoke<void>("job_cancel", { id }),
-  jobRetry: (id: string) => invoke<Job>("job_retry", { id }),
+  jobRetry: (id: string, request?: JobRetryRequest | null) =>
+    invoke<Job>("job_retry", { id, request: request ?? null }),
   jobRemove: (id: string) => invoke<void>("job_remove", { id }),
   jobOpen: (id: string) => invoke<string>("job_open", { id }),
   tasksList: () => invoke<Task[]>("tasks_list"),
@@ -61,8 +74,10 @@ export const api = {
   autostartGet: () => invoke<AutostartStatus>("autostart_get"),
   autostartSet: (enabled: boolean) => invoke<AutostartStatus>("autostart_set", { enabled }),
   getDataDir: () => invoke<string>("get_data_dir"),
-  dataExport: () => invoke<string>("data_export"),
-  dataImport: () => invoke<string>("data_import"),
+  dataExport: (includeCommands = false) =>
+    invoke<string>("data_export", { includeCommands }),
+  dataImport: () => invoke<ImportOutcome>("data_import"),
+  restartApp: () => invoke<void>("restart_app"),
   secretsList: () => invoke<SecretEntryView[]>("secrets_list"),
   secretSave: (input: SecretEntryInput) =>
     invoke<SecretEntryView[]>("secret_save", { input }),
@@ -77,6 +92,7 @@ export const api = {
   dbQuery: (id: string, sql: string, offset: number, limit: number) =>
     invoke<DbQueryResult>("db_query", { id, sql, offset, limit }),
   dbClose: (id: string) => invoke<void>("db_close", { id }),
+  dbCloseAll: () => invoke<void>("db_close_all"),
   dbHistoryList: () => invoke<DbHistoryEntry[]>("db_history_list"),
   dbHistoryReveal: (id: string) => invoke<string>("db_history_reveal", { id }),
   dbHistoryRename: (id: string, name: string) =>

@@ -218,9 +218,7 @@
                   @clear="clearSecret('youdao')"
                 />
               </div>
-              <p class="hint">
-                Key 加密保存在本机（Windows DPAPI），不会写入 config.json；留空表示保持原值。
-              </p>
+              <SecretProtectionNotice />
             </n-collapse-item>
           </n-collapse>
 
@@ -307,17 +305,7 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2 class="section-title">备份与恢复</h2>
-        <div class="backup-actions">
-          <n-button size="small" @click="exportData">导出备份</n-button>
-          <n-button size="small" @click="importData">从备份恢复</n-button>
-        </div>
-        <div class="hint">
-          备份包含配置、翻译历史、任务与下载记录，敏感信息（API 密钥、代理、Cookie、请求头）会被剔除。
-          恢复前会校验版本，失败时保留现有数据；恢复成功后应用会自动重启。
-        </div>
-      </section>
+      <BackupPanel />
 
       <section class="card">
         <h2 class="section-title">关于</h2>
@@ -366,6 +354,8 @@ import {
 import { api } from "../api";
 import { loadSnapshot, store } from "../store";
 import { describeError } from "../utils/errors";
+import { saveConfigWithConflict } from "../utils/configConflict";
+import { normalizeSettingsDraft } from "../utils/settingsPayload";
 import { defaultLlmConfig } from "../utils/llm";
 import type {
   AppConfig,
@@ -378,8 +368,10 @@ import type {
 import PageHead from "../components/PageHead.vue";
 import EmptyState from "../components/EmptyState.vue";
 import AutostartCard from "../components/settings/AutostartCard.vue";
+import BackupPanel from "../components/settings/BackupPanel.vue";
 import ConfigField from "../components/settings/ConfigField.vue";
 import SecretField from "../components/settings/SecretField.vue";
+import SecretProtectionNotice from "../components/settings/SecretProtectionNotice.vue";
 
 const PROVIDER_ORDER: ProviderId[] = ["microsoft", "google", "openai", "deepl", "baidu", "youdao"];
 
@@ -721,72 +713,27 @@ function discard(): void {
   reload();
 }
 
-async function exportData(): Promise<void> {
-  try {
-    const path = await api.dataExport();
-    if (!path) return;
-    message.success(`备份已导出：${path}`);
-  } catch (err) {
-    message.error(`导出失败：${errorText(err)}`);
-  }
-}
-
-function importData(): void {
-  dialog.warning({
-    title: "从备份恢复数据？",
-    content:
-      "将覆盖当前配置、翻译历史、任务和下载记录（不含 API 密钥）。恢复成功后应用会自动重启。",
-    positiveText: "选择备份并恢复",
-    negativeText: "取消",
-    onPositiveClick: () => {
-      void runImport();
-    },
-  });
-}
-
-async function runImport(): Promise<void> {
-  try {
-    const summary = await api.dataImport();
-    if (!summary) return;
-    message.success(summary);
-  } catch (err) {
-    message.error(`恢复失败：${errorText(err)}`);
-  }
-}
-
 async function save(): Promise<void> {
   if (!store.config || saving.value) return;
-  const payload = cloneConfig(draft.value);
-  payload.translate.provider = payload.translate.provider || "microsoft";
-  payload.translate.fallback = PROVIDER_ORDER.filter(
-    (provider) =>
-      provider !== payload.translate.provider && payload.translate.fallback.includes(provider),
-  );
-  const max = Number(payload.history.maxEntries);
-  payload.history.maxEntries = Number.isFinite(max)
-    ? Math.min(2000, Math.max(1, Math.round(max)))
-    : 200;
-  const concurrency = Number(payload.downloadConcurrency);
-  payload.downloadConcurrency = Number.isFinite(concurrency)
-    ? Math.min(5, Math.max(1, Math.round(concurrency)))
-    : 2;
-  const fragments = Number(payload.fragmentThreads);
-  payload.fragmentThreads = Number.isFinite(fragments)
-    ? Math.min(16, Math.max(1, Math.round(fragments)))
-    : 4;
-  const delay = Number(payload.startup.delaySeconds);
-  payload.startup.delaySeconds = Number.isFinite(delay) ? delay : 0;
-  const ttsRate = Number(payload.translate.ttsRate);
-  payload.translate.ttsRate = Number.isFinite(ttsRate)
-    ? Math.min(2, Math.max(0.5, ttsRate))
-    : 1;
-
+  const payload = normalizeSettingsDraft(draft.value);
   const rev = draftRev.value;
   const patch = buildSecretPatch(payload);
 
   saving.value = true;
   try {
-    const result = await api.saveConfig(payload, patch);
+    const result = await saveConfigWithConflict(
+      dialog,
+      (base) => api.saveConfig(payload, patch, "settings", base),
+      store.configRevision,
+      (conflict) => {
+        store.config = conflict.config;
+        store.configRevision = conflict.configRevision;
+        resetDraft();
+        message.info("已载入磁盘上的最新配置");
+      },
+    );
+    if (!result) return;
+    store.configRevision = result.configRevision;
     store.config = result.config;
     store.tools = result.tools;
     store.providers = result.providers;
@@ -962,13 +909,6 @@ async function save(): Promise<void> {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.backup-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
 }
 
 @media (max-width: 720px) {

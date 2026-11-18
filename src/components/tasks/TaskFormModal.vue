@@ -310,7 +310,6 @@ import {
 import { api } from "../../api";
 import { store } from "../../store";
 import type {
-  AppConfig,
   ScheduleKind,
   Task,
   TaskInput,
@@ -318,6 +317,7 @@ import type {
   TaskType,
 } from "../../types";
 import { emptyPayload, errorText, formatDateTime } from "./task-utils";
+import { enableCommandsWithConflict } from "../../utils/securityConfig";
 import { CRON_PRESETS, cronSummary, parseWeekdays } from "../../utils/cron";
 
 const props = defineProps<{
@@ -768,12 +768,12 @@ function confirmEnableCommands(): Promise<boolean> {
       negativeText: "取消",
       onPositiveClick: async () => {
         try {
-          const config = JSON.parse(JSON.stringify(store.config)) as AppConfig;
-          config.security.allowCommands = true;
-          const result = await api.saveConfig(config);
-          store.config = result.config;
-          store.tools = result.tools;
-          store.providers = result.providers;
+          const enabled = await enableCommandsWithConflict(dialog);
+          if (!enabled) {
+            apiError.value = "未开启命令执行，任务未保存。";
+            finish(false);
+            return false;
+          }
           message.success("已开启命令执行");
           finish(true);
         } catch (err) {
