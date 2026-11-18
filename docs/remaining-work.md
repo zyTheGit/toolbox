@@ -2,7 +2,7 @@
 
 整理时间：2026-11-18（T8 文档验收更新）。范围：0.1.0 发版前未完成的工作、已知问题与规划中未启动的功能。第 7 节四项规划功能已于 2026-11-17 完成实现；T0-T7 的改造与验证记录见 `docs/交接文档-2026-11-17.md` 附录 C。
 
-## 1. 阻塞项：0.1.0 发版（草稿已就绪，等待安装冒烟与发布确认）
+## 1. 0.1.0 发版（已发布，NSIS 安装冒烟待补做）
 
 当前状态：
 
@@ -14,7 +14,7 @@
 | tag | `v0.1.0`（annotated）已推送，指向 `cc5614a` |
 | CI 门禁 | run `44234306466` 四平台全绿（frontend + Windows / macOS / Ubuntu Rust） |
 | 发版构建 | Release run `44234824785` 四平台全绿 |
-| 草稿 Release | `Toolbox v0.1.0` 已生成，描述已填写，**未发布**；Windows 产物哈希已与 `SHA256SUMS-windows-x64.txt` 比对一致 |
+| Release | `Toolbox v0.1.0` 已于 2026-11-18 04:42 UTC 发布（非预发布）；描述分节完整，Windows 产物哈希已与 `SHA256SUMS-windows-x64.txt` 比对一致 |
 | 发版基线（T0） | 已新增 `scripts/check-version.mjs`、`scripts/check-file-length.mjs`、`scripts/sha256sums.mjs`、`docs/RELEASE_CHECKLIST.md`；CI / Release workflow 与 CSP 已加固，Action 已固定到 commit SHA |
 
 待办：
@@ -26,8 +26,9 @@
 5. 已完成：`git push origin main`，CI run `44234306466` 四平台全绿
 6. 已完成：`git tag -a v0.1.0 -m "Toolbox 0.1.0"` 并推送，tag 指向 `cc5614a`
 7. 已完成：Release run `44234824785` 四平台构建全绿
-8. 已完成：复核草稿 Release 产物与 `SHA256SUMS-*.txt`，填写发布描述；Windows 安装包 / 便携包实测哈希一致
-9. **待用户确认**：NSIS 冒烟通过后再手动发布草稿 Release
+8. 已完成：复核产物与 `SHA256SUMS-*.txt`，填写发布描述；Windows 安装包 / 便携包实测哈希一致
+9. 已完成：已发布 Release `v0.1.0`（2026-11-18 04:42 UTC）；仓库为私有，需登录且有权限才能访问
+10. **待补做**：NSIS 安装冒烟（托盘、自启、备份导入导出），安装会写入本机应用状态
 
 ### Release 描述草稿（0.1.0 为首个版本，兼容性无破坏性变更）
 
