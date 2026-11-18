@@ -89,6 +89,22 @@ fn unprotect(blob: &[u8]) -> Result<Vec<u8>, String> {
     Ok(blob.to_vec())
 }
 
+/// 当前平台的密钥保护级别，供 UI / README 如实说明，不夸大跨平台加密能力。
+#[cfg(windows)]
+pub(crate) fn protection() -> &'static str {
+    "dpapi"
+}
+
+#[cfg(all(unix, not(windows)))]
+pub(crate) fn protection() -> &'static str {
+    "file-permissions"
+}
+
+#[cfg(not(any(windows, unix)))]
+pub(crate) fn protection() -> &'static str {
+    "unknown"
+}
+
 #[cfg(windows)]
 mod dpapi {
     use std::ffi::c_void;

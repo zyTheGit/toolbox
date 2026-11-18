@@ -11,7 +11,7 @@
 use reqwest::Client;
 use tauri::AppHandle;
 
-use crate::core::tools::{download_file, exe_file, install_binary, verify_sha256, with_mirror};
+use crate::core::tools::{binary_url, download_file, exe_file, install_binary, verify_sha256, MAX_BINARY_BYTES};
 use crate::models::AppConfig;
 use crate::state::AppPaths;
 
@@ -77,7 +77,8 @@ pub(crate) async fn install_ffmpeg_static(
 ) -> Result<(), String> {
     let name = ffmpeg_asset()?;
     let (download_url, expected) = resolve_asset(client, name).await?;
-    let url = with_mirror(&download_url, &config.tool_download_mirror);
+    // 二进制可用镜像（必须 https）；SHA256 来自官方 Release API，不受镜像影响。
+    let url = binary_url(&download_url, &config.tool_download_mirror)?;
     let dest = paths.bin_dir.join(exe_file("ffmpeg"));
     let part = paths
         .bin_dir
@@ -85,7 +86,7 @@ pub(crate) async fn install_ffmpeg_static(
     let _ = std::fs::remove_file(&part);
 
     let outcome = async {
-        download_file(client, &url, &part, app, "ffmpeg").await?;
+        download_file(client, &url, &part, app, "ffmpeg", MAX_BINARY_BYTES).await?;
         verify_sha256(&part, &expected, "ffmpeg")?;
 
         #[cfg(unix)]

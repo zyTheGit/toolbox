@@ -39,13 +39,46 @@ pub fn save_json<T: Serialize + ?Sized>(path: &Path, value: &T) -> Result<(), St
 }
 
 pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_atomic(path, bytes, false)
+}
+
+/// 敏感文件写入（如 `secrets.bin`）：Unix 下临时文件创建即 0600，
+/// rename 后目标文件不会出现 group/other 可读窗口；Windows 继续依赖 DPAPI。
+pub fn write_private_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_atomic(path, bytes, true)
+}
+
+/// 收紧已存在敏感文件的权限（Unix 0600）。旧版本遗留的 `secrets.bin`
+/// 可能仍是 0644，读取时统一收紧，而不是只在新写入时设置。
+/// 返回是否发生了权限变更；非 Unix 平台始终返回 false。
+pub fn restrict_private(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let Ok(meta) = std::fs::metadata(path) else {
+            return false;
+        };
+        if meta.permissions().mode() & 0o777 == PRIVATE_FILE_MODE {
+            return false;
+        }
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(PRIVATE_FILE_MODE))
+            .is_ok()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        false
+    }
+}
+
+fn write_atomic(path: &Path, bytes: &[u8], private: bool) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|err| io_error("创建目录", path, &err))?;
     }
 
     let temp = unique_temp(path);
-    if let Err(err) = std::fs::write(&temp, bytes) {
+    if let Err(err) = write_temp(&temp, bytes, private) {
         let _ = std::fs::remove_file(&temp);
         return Err(io_error("写入", path, &err));
     }
@@ -55,6 +88,28 @@ pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// `private = true` 时，Unix 用 `OpenOptions::mode(0600)` 创建临时文件再写入。
+fn write_temp(path: &Path, bytes: &[u8], private: bool) -> std::io::Result<()> {
+    #[cfg(unix)]
+    if private {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(PRIVATE_FILE_MODE)
+            .open(path)?;
+        file.write_all(bytes)?;
+        return file.sync_all();
+    }
+    #[cfg(not(unix))]
+    let _ = private;
+    std::fs::write(path, bytes)
+}
+
+#[cfg(unix)]
+const PRIVATE_FILE_MODE: u32 = 0o600;
 
 pub fn load_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
     match std::fs::read(path) {
@@ -160,5 +215,25 @@ mod tests {
         }
         let loaded: Vec<String> = load_json(&path).unwrap().unwrap();
         assert_eq!(loaded.len(), 32);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_write_is_0600_and_tightens_existing_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = temp_dir();
+        let path = dir.join("secrets.bin");
+        write_private_bytes(&path, b"secret").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "新建敏感文件必须是 0600");
+
+        // 模拟旧版本遗留的宽松权限：读取时收紧，而不是只在新写入时设置。
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(restrict_private(&path));
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert!(!restrict_private(&path), "已是 0600 时不应重复报告变更");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

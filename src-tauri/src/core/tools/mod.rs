@@ -4,9 +4,11 @@ mod checksum;
 mod install;
 mod net;
 
-pub use checksum::{verify_ffmpeg_checksum, verify_ytdlp_checksum};
-pub(crate) use checksum::verify_sha256;
-pub(crate) use net::{download_file, with_mirror};
+pub use checksum::{
+    parse_bare_sha256, parse_sha256_sums, verify_ffmpeg_checksum, verify_sha256,
+    verify_ytdlp_checksum,
+};
+pub(crate) use net::{binary_url, download_file, MAX_BINARY_BYTES};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

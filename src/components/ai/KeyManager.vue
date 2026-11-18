@@ -3,9 +3,8 @@
     <div class="spread head">
       <div>
         <h2 class="section-title">API Key 管理器</h2>
-        <p class="hint">
-          所有凭据加密保存在本机（Windows 使用 DPAPI），列表默认脱敏；复制明文需二次确认。
-        </p>
+        <p class="hint">列表默认脱敏；复制明文需二次确认。</p>
+        <SecretProtectionNotice />
       </div>
       <n-button type="primary" size="small" @click="openCreate">新增凭据</n-button>
     </div>
@@ -99,6 +98,7 @@ import { api } from "../../api";
 import { loadSecretEntries, loadSnapshot, store } from "../../store";
 import { describeError } from "../../utils/errors";
 import { copyText } from "../../utils/clipboard";
+import SecretProtectionNotice from "../settings/SecretProtectionNotice.vue";
 import type { SecretEntryInput, SecretEntryView } from "../../types";
 
 const message = useMessage();

@@ -17,12 +17,14 @@ pub fn secret_save(
     input: SecretEntryInput,
     state: State<'_, AppState>,
 ) -> CmdResult<Vec<SecretEntryView>> {
+    state.ensure_writable()?;
     state.secrets.save_entry(input)?;
     Ok(state.secrets.list())
 }
 
 #[tauri::command]
 pub fn secret_delete(id: String, state: State<'_, AppState>) -> CmdResult<Vec<SecretEntryView>> {
+    state.ensure_writable()?;
     state.secrets.delete_entry(&id)?;
     Ok(state.secrets.list())
 }

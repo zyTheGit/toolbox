@@ -1,10 +1,11 @@
 //! 凭据存储：可扩展条目列表 + 旧版固定字段迁移。
 //!
-//! 文件本身经 DPAPI（Windows）保护并以 hex 编码，见 `codec`。
+//! Windows 下文件经 DPAPI 保护并以 hex 编码；macOS / Linux 目前只靠
+//! 目录 0700 与 `secrets.bin` 0600 的文件权限，内容等同明文，见 `codec`。
 
 use std::path::PathBuf;
 
-use chrono::{Local, NaiveDate, SecondsFormat};
+use chrono::{Local, SecondsFormat};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
@@ -13,8 +14,11 @@ use crate::models::AppConfig;
 
 mod codec;
 mod db_history;
+mod status;
 #[cfg(test)]
 mod tests;
+
+pub use status::SecretStatus;
 
 pub const BUILTIN_OPENAI: &str = "translate.openai";
 pub const BUILTIN_DEEPL: &str = "translate.deepl";
@@ -22,7 +26,6 @@ pub const BUILTIN_BAIDU: &str = "translate.baidu";
 pub const BUILTIN_YOUDAO: &str = "translate.youdao";
 
 const MAX_SECRET_LEN: usize = 20_000;
-const EXPIRING_DAYS: i64 = 7;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -75,15 +78,6 @@ pub struct SecretPatch {
     pub youdao_app_secret: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SecretStatus {
-    pub openai: bool,
-    pub deepl: bool,
-    pub baidu: bool,
-    pub youdao: bool,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SecretEntryInput {
@@ -114,7 +108,11 @@ pub struct SecretEntryView {
 
 pub struct SecretStore {
     path: PathBuf,
+    /// 与 `secrets.bin` 同级的 config.json，用于迁移后立即写回已清空的配置。
+    config_path: PathBuf,
     secrets: Mutex<Secrets>,
+    /// 一次性提示（迁移 / 权限收紧），由首次 `get_app_snapshot` 读取。
+    notice: Mutex<Option<String>>,
 }
 
 impl SecretStore {
@@ -126,7 +124,7 @@ impl SecretStore {
                 Ok(codec::Decoded::Legacy(old)) => {
                     let migrated = Secrets::from_legacy(old);
                     if let Err(err) = codec::encode(&migrated)
-                        .and_then(|encoded| persist::write_bytes(&path, &encoded))
+                        .and_then(|encoded| persist::write_private_bytes(&path, &encoded))
                     {
                         warning = Some(format!("密钥文件升级失败（{err}），本次运行使用内存中的新格式"));
                     }
@@ -149,10 +147,18 @@ impl SecretStore {
                 Secrets::default()
             }
         };
+        // 旧版本可能留下 0644 的 secrets.bin：读取时统一收紧为 0600。
+        let notice = if persist::restrict_private(&path) {
+            Some("已收紧密钥文件权限为 0600（仅当前用户可读写）".to_string())
+        } else {
+            None
+        };
         (
             Self {
+                config_path: path.with_file_name("config.json"),
                 path,
                 secrets: Mutex::new(secrets),
+                notice: Mutex::new(notice),
             },
             warning,
         )
@@ -165,7 +171,13 @@ impl SecretStore {
             deepl: has_secret(&secrets, BUILTIN_DEEPL),
             baidu: has_secret(&secrets, BUILTIN_BAIDU),
             youdao: has_secret(&secrets, BUILTIN_YOUDAO),
+            protection: SecretStatus::protection_level().to_string(),
         }
+    }
+
+    /// 读取并清除一次性的密钥迁移 / 权限提示（启动后首次快照展示）。
+    pub fn take_migration_notice(&self) -> Option<String> {
+        self.notice.lock().take()
     }
 
     pub fn secret_for(&self, id: &str) -> Option<String> {
@@ -185,7 +197,7 @@ impl SecretStore {
                 !entry.secret.trim().is_empty() && !db_history::is_db_entry(entry)
             })
             .map(|entry| {
-                let (expired, days_left) = expiry(&entry.expires_on);
+                let (expired, days_left) = status::expiry(&entry.expires_on);
                 SecretEntryView {
                     id: entry.id.clone(),
                     name: entry.name.clone(),
@@ -219,7 +231,7 @@ impl SecretStore {
         let note = input.note.trim().to_string();
         let expires_on = input.expires_on.trim().to_string();
 
-        validate_expiry(&expires_on)?;
+        status::validate_expiry(&expires_on)?;
         if name.is_empty() {
             return Err("[PARAM] 请输入凭据名称".into());
         }
@@ -299,27 +311,7 @@ impl SecretStore {
             .ok_or_else(|| "[DATA] 凭据不存在或内容为空".to_string())
     }
 
-    /// 临近或已经过期的凭据提示，供启动时展示。
-    pub fn expiring_warnings(&self) -> Vec<String> {
-        self.list()
-            .into_iter()
-            .filter_map(|entry| {
-                let days = entry.days_left?;
-                if days > EXPIRING_DAYS {
-                    return None;
-                }
-                let when = if days < 0 {
-                    format!("已过期 {} 天", -days)
-                } else if days == 0 {
-                    "今天到期".to_string()
-                } else {
-                    format!("{days} 天后到期")
-                };
-                Some(format!("凭据「{}」{when}，请及时更新", entry.name))
-            })
-            .collect()
-    }
-
+    /// 把密钥库中的内置翻译密钥填充到内存配置（`config.json` 永远不保存密钥）。
     pub fn apply_to(&self, config: &mut AppConfig) {
         let secrets = self.secrets.lock();
         config.translate.openai.api_key = secrets.secret_of(BUILTIN_OPENAI);
@@ -328,8 +320,9 @@ impl SecretStore {
         config.translate.youdao.app_secret = secrets.secret_of(BUILTIN_YOUDAO);
     }
 
-    /// Move keys embedded in an older config.json into the secret store and
-    /// blank them in the config. Returns whether anything migrated.
+    /// Move keys embedded in an older config.json into the secret store,
+    /// immediately rewrite the cleared config back to disk, and record a
+    /// one-shot notice for the first snapshot. Returns whether anything migrated.
     pub fn migrate_inline(&self, config: &mut AppConfig) -> Result<bool, String> {
         let patch = SecretPatch {
             openai_api_key: take_secret(&mut config.translate.openai.api_key),
@@ -338,10 +331,23 @@ impl SecretStore {
             youdao_app_secret: take_secret(&mut config.translate.youdao.app_secret),
         };
         let changed = !patch_is_empty(&patch);
-        if changed {
-            self.apply_patch(&patch)?;
+        if !changed {
+            return Ok(false);
         }
-        Ok(changed)
+        self.apply_patch(&patch)?;
+
+        // 密钥已安全落库；立即原子写回不含密钥的 config.json，
+        // 避免明文继续留在磁盘上等下一次保存。
+        let mut stored = config.clone();
+        config::clear_secrets(&mut stored);
+        let notice = match persist::save_json(&self.config_path, &stored) {
+            Ok(()) => "已将 config.json 中的内联密钥迁移到密钥文件，并从配置文件清除".to_string(),
+            Err(err) => format!(
+                "内联密钥已迁移到密钥文件，但清理 config.json 失败（{err}），请手动删除配置中的密钥"
+            ),
+        };
+        *self.notice.lock() = Some(notice);
+        Ok(true)
     }
 
     pub fn apply_patch(&self, patch: &SecretPatch) -> Result<(), String> {
@@ -370,7 +376,7 @@ impl SecretStore {
                 return Err(format!("[DATA] 保存密钥失败: {err}"));
             }
         };
-        if let Err(err) = persist::write_bytes(&self.path, &encoded) {
+        if let Err(err) = persist::write_private_bytes(&self.path, &encoded) {
             *secrets = previous;
             return Err(format!("[DATA] 保存密钥失败: {err}"));
         }
@@ -470,22 +476,6 @@ fn mask_secret(secret: &str) -> String {
     let head: String = chars[..3].iter().collect();
     let tail: String = chars[chars.len() - 4..].iter().collect();
     format!("{head}…{tail}")
-}
-
-fn expiry(expires_on: &str) -> (bool, Option<i64>) {
-    let Ok(date) = NaiveDate::parse_from_str(expires_on.trim(), "%Y-%m-%d") else {
-        return (false, None);
-    };
-    let days = (date - Local::now().date_naive()).num_days();
-    (days < 0, Some(days))
-}
-
-fn validate_expiry(value: &str) -> Result<(), String> {
-    if value.is_empty() || NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok() {
-        Ok(())
-    } else {
-        Err("[PARAM] 过期日期格式应为 YYYY-MM-DD".into())
-    }
 }
 
 fn take_secret(value: &mut String) -> Option<String> {

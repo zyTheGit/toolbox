@@ -7,15 +7,13 @@ use std::time::Duration;
 use reqwest::Client;
 use tauri::AppHandle;
 
-use super::checksum::{verify_ffmpeg_checksum, verify_ytdlp_checksum};
-use super::net::{download_file, emit_progress, with_mirror};
+use super::checksum::{verify_ytdlp_checksum, ytdlp_url};
+use super::net::{binary_url, download_file, emit_progress, MAX_BINARY_BYTES};
 use super::{
     exe_file, install_binary, read_version_with_timeout, swap_in,
 };
 use crate::models::AppConfig;
 use crate::state::AppPaths;
-
-const FFMPEG_ZIP: &str = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
 
 pub(crate) async fn install_ytdlp(
     client: &Client,
@@ -23,18 +21,18 @@ pub(crate) async fn install_ytdlp(
     config: &AppConfig,
     paths: &AppPaths,
 ) -> Result<(), String> {
-    let url = ytdlp_url();
-    let url = with_mirror(url, &config.tool_download_mirror);
+    // 二进制可用镜像；校验文件固定官方 origin（见 checksum）。
+    let url = binary_url(&ytdlp_url(), &config.tool_download_mirror)?;
     let dest = paths.bin_dir.join(exe_file("ytdlp"));
     let part = paths.bin_dir.join(format!("{}.part", exe_file("ytdlp")));
     let _ = std::fs::remove_file(&part);
 
-    if let Err(err) = download_file(client, &url, &part, app, "ytdlp").await {
+    if let Err(err) = download_file(client, &url, &part, app, "ytdlp", MAX_BINARY_BYTES).await {
         let _ = std::fs::remove_file(&part);
         return Err(err);
     }
 
-    if let Err(err) = verify_ytdlp_checksum(client, &part, &url).await {
+    if let Err(err) = verify_ytdlp_checksum(client, &part).await {
         let _ = std::fs::remove_file(&part);
         return Err(err);
     }
@@ -61,7 +59,9 @@ pub(crate) async fn install_ffmpeg(
     }
     #[cfg(windows)]
     {
-        let url = with_mirror(FFMPEG_ZIP, &config.tool_download_mirror);
+        use super::checksum::{ffmpeg_url, verify_ffmpeg_checksum};
+
+        let url = binary_url(ffmpeg_url(), &config.tool_download_mirror)?;
         let temp_dir = paths
             .bin_dir
             .join(format!(".tmp-ffmpeg-{}", uuid::Uuid::new_v4()));
@@ -69,8 +69,8 @@ pub(crate) async fn install_ffmpeg(
         let zip = temp_dir.join("ffmpeg.zip");
 
         let outcome = async {
-            download_file(client, &url, &zip, app, "ffmpeg").await?;
-            verify_ffmpeg_checksum(client, &zip, &url).await?;
+            download_file(client, &url, &zip, app, "ffmpeg", MAX_BINARY_BYTES).await?;
+            verify_ffmpeg_checksum(client, &zip).await?;
             emit_progress(app, "ffmpeg", "extract", Some(0.0), 0, 0);
             expand_archive(&zip, &temp_dir).await?;
 
@@ -102,16 +102,6 @@ pub(crate) async fn install_ffmpeg(
 
         let _ = std::fs::remove_dir_all(&temp_dir);
         outcome
-    }
-}
-
-fn ytdlp_url() -> &'static str {
-    if cfg!(windows) {
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
-    } else if cfg!(target_os = "macos") {
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
-    } else {
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
     }
 }
 

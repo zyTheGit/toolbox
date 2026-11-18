@@ -4,6 +4,12 @@ fn temp_path() -> PathBuf {
     std::env::temp_dir().join(format!("toolbox-secrets-{}.bin", uuid::Uuid::new_v4()))
 }
 
+fn temp_dir() -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("toolbox-secrets-dir-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
 #[test]
 fn patch_is_write_only_and_persists() {
     let path = temp_path();
@@ -167,8 +173,9 @@ fn expiring_entries_are_reported() {
 
 #[test]
 fn config_file_does_not_contain_secrets() {
-    let path = temp_path();
-    let (store, _) = SecretStore::load(path.clone());
+    let dir = temp_dir();
+    let paths = crate::state::AppPaths::from_data_dir(dir.clone());
+    let (store, _) = SecretStore::load(paths.secrets_file.clone());
     store
         .apply_patch(&SecretPatch {
             deepl_api_key: Some("canary-deepl-key".into()),
@@ -181,8 +188,6 @@ fn config_file_does_not_contain_secrets() {
     assert!(store.migrate_inline(&mut config).unwrap());
     assert!(config.translate.deepl.api_key.is_empty());
 
-    let dir = std::env::temp_dir().join(format!("toolbox-config-{}", uuid::Uuid::new_v4()));
-    let paths = crate::state::AppPaths::from_data_dir(dir);
     let mut realized = config.clone();
     store.apply_to(&mut realized);
     config::save(&paths, &realized).unwrap();
@@ -191,8 +196,78 @@ fn config_file_does_not_contain_secrets() {
     assert!(!text.contains("canary-deepl-key"));
     assert_eq!(realized.translate.deepl.api_key, "canary-inline");
 
-    let _ = std::fs::remove_dir_all(&paths.data_dir);
-    let _ = std::fs::remove_file(path);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn migrate_inline_rewrites_config_immediately() {
+    let dir = temp_dir();
+    let paths = crate::state::AppPaths::from_data_dir(dir.clone());
+
+    // 模拟旧版本：config.json 里仍带明文密钥。
+    let mut config = AppConfig::default();
+    config.translate.openai.api_key = "canary-inline-openai".into();
+    crate::core::persist::save_json(&paths.config_file, &config).unwrap();
+    assert!(
+        std::fs::read_to_string(&paths.config_file)
+            .unwrap()
+            .contains("canary-inline-openai")
+    );
+
+    let (store, warning) = SecretStore::load(paths.secrets_file.clone());
+    assert!(warning.is_none());
+    let mut loaded: AppConfig = crate::core::persist::load_json(&paths.config_file)
+        .unwrap()
+        .unwrap();
+    assert!(store.migrate_inline(&mut loaded).unwrap());
+
+    // 不依赖下一次保存：迁移后立即原子写回，磁盘上的明文必须消失。
+    let text = std::fs::read_to_string(&paths.config_file).unwrap();
+    assert!(
+        !text.contains("canary-inline-openai"),
+        "config.json 必须立即清除内联密钥"
+    );
+    assert_eq!(
+        store.secret_for(BUILTIN_OPENAI).as_deref(),
+        Some("canary-inline-openai")
+    );
+    // 密钥库是 hex 编码 / DPAPI 保护，文件里不应出现明文。
+    let raw = std::fs::read_to_string(&paths.secrets_file).unwrap();
+    assert!(!raw.contains("canary-inline-openai"));
+
+    // 迁移提示只读取一次。
+    let notice = store.take_migration_notice().expect("应有迁移提示");
+    assert!(notice.contains("迁移"));
+    assert!(store.take_migration_notice().is_none());
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn secret_file_is_0600_and_legacy_mode_is_tightened() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = temp_dir();
+    let path = dir.join("secrets.bin");
+    let (store, _) = SecretStore::load(path.clone());
+    store
+        .apply_patch(&SecretPatch {
+            openai_api_key: Some("sk-unix-perm".into()),
+            ..SecretPatch::default()
+        })
+        .unwrap();
+    let mode = |p: &PathBuf| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&path), 0o600, "secrets.bin 必须是 0600");
+
+    // 旧版本遗留的 0644：重新加载时收紧。
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let (reloaded, warning) = SecretStore::load(path.clone());
+    assert!(warning.is_none());
+    assert_eq!(mode(&path), 0o600);
+    assert!(reloaded.take_migration_notice().is_some());
+
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
