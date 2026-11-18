@@ -29,7 +29,7 @@ fn asset() -> &'static str {
 #[test]
 fn official_sums_document_selects_platform_asset() {
     let sums = format!(
-        "{}  yt-dlp_linux\n{}  {}\n",
+        "{}  yt-dlp_other\n{}  {}\n",
         "1".repeat(64),
         SHA256_ABC,
         asset()
