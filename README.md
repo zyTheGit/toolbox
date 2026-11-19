@@ -1,6 +1,6 @@
 # Toolbox
 
-面向 Windows / macOS / Linux 的桌面工具箱（Windows 为主验证平台），基于 Tauri 2 + Vue 3 + Naive UI。提供中英文翻译、m3u8 视频下载和通用定时任务，并附带开发工具、AI 调试台与数据库浏览器；常驻系统托盘并支持开机自启。
+面向 Windows / macOS / Linux 的桌面工具箱（Windows 为主验证平台），基于 Tauri 2 + Vue 3 + Naive UI。提供中英文翻译、视频下载和通用定时任务，并附带开发工具、AI 调试台与数据库浏览器；常驻系统托盘并支持开机自启。
 
 ## 功能要点
 
@@ -10,11 +10,13 @@
 - 免 Key 可用：默认走微软翻译，失败时按配置回退到 Google 等免 Key 服务。
 - 自有 Key：支持 OpenAI、DeepL、百度、有道，Key 在设置页填写。
 - 显示实际使用的服务与耗时。
-- 译文支持系统语音朗读并随时停止；朗读倍率（0.5x - 2x）在设置中选择，无需额外下载语音包。
+- 原文与译文均支持系统语音朗读并随时停止；朗读倍率（0.5x - 2x）在设置中选择，无需额外下载语音包。
 - 翻译历史本地保存，默认最多 200 条，支持收藏、关键词搜索及按方向/服务筛选。
 
-### m3u8 下载
+### 下载
 
+- 支持 m3u8 直链，以及 YouTube、X（Twitter）、B 站等站点链接；可直接粘贴 App 分享文本，自动提取其中的链接并按单个视频下载。
+- 可选下载站点字幕（中 / 英 / 中英，YouTube 等），ffmpeg 可用时统一转换为 SRT；站点原字幕语言标注有误时可改用「中文（YouTube 机翻）」；可勾选「仅下载字幕」跳过视频/音频，只保存字幕文件。
 - 批量粘贴链接，可同时下载 1 - 5 个任务（设置中配置），避免无限制抢占带宽。
 - 分片并发线程统一在设置中配置（1 - 16，默认 4）；支持自定义视频文件名（扩展名自动匹配，多个链接自动追加 01、02 等序号）。
 - 实时显示进度、速度、剩余时间与日志，可随时取消单个任务。
@@ -103,8 +105,11 @@ node scripts/check-version.mjs       # 三处版本号（含 tag）一致性
 node scripts/check-file-length.mjs   # 单文件 400 行基线检查
 npm run tauri:dev     # 开发调试
 npm run tauri:build   # 生成 release 与安装包
+npm run clean:target  # 清理 Rust 构建缓存（会触发依赖重新编译）
 npm run package:portable            # Windows 便携版 zip
 ```
+
+`src-tauri/target` 是 Cargo 的构建缓存。dev profile 已关闭本地增量缓存并去掉依赖调试符号，避免随开发迭代持续膨胀；缓存仍然偏大时可执行 `npm run clean:target` 全量清理。
 
 NSIS 安装包输出到 `src-tauri/target/release/bundle/nsis/`。构建产物依赖版本与目标架构，文件名以实际输出为准。发版步骤见 [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)。
 
@@ -163,7 +168,7 @@ macOS 使用 `~/Library/LaunchAgents` 下的 launchd 用户代理，Linux 使用
 
 ## 常见问题
 
-- **提示缺少 yt-dlp**：在「设置 → 下载与工具」中一键安装，或手动指定已有的 `yt-dlp.exe` 路径。m3u8 下载依赖它。
+- **提示缺少 yt-dlp**：在「设置 → 下载与工具」中一键安装，或手动指定已有的 `yt-dlp.exe` 路径。下载功能依赖它。
 - **合并视频失败**：通常是缺少 ffmpeg 或路径失效。重新安装 ffmpeg，并确认设置中的工具路径存在。
 - **无法写入下载目录**：检查目录是否存在、当前用户是否有写权限；必要时改到用户目录下的可写路径。
 - **下载或工具安装很慢**：在设置中填写代理地址或切换工具下载镜像后重试。
