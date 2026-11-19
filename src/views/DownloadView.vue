@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <PageHead title="m3u8 下载" subtitle="调用 yt-dlp 下载，支持批量链接、并发任务与实时进度。">
+    <PageHead title="下载" subtitle="调用 yt-dlp 下载视频、音频与字幕，支持 m3u8、YouTube、X、B 站链接或分享文本。">
       <n-button size="small" @click="openDownloadDir">打开下载目录</n-button>
     </PageHead>
 

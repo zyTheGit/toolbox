@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::core::config::expand_home;
 use crate::core::persist;
-use crate::models::{AppConfig, DownloadRequest, Job, JobProgress};
+use crate::models::{AppConfig, DownloadRequest, Job};
 use crate::state::{push_warning, AppPaths, SharedConfig, Warnings};
 
 mod args;
@@ -23,7 +23,7 @@ mod worker;
 pub(crate) use self::args::redact_text;
 use self::args::validate_extra_args;
 use self::credentials::{adopt_loaded_jobs, strip_job, JobCredentials};
-use self::naming::{job_name, now_string, sanitize_file_name};
+use self::naming::{job_name, normalize_subtitles, now_string, sanitize_file_name};
 use self::state::{is_active, mark_interrupted};
 use crate::core::proc::kill_tree;
 
@@ -178,6 +178,8 @@ impl Downloader {
         } else {
             request.quality.trim().to_string()
         };
+        let subtitles = normalize_subtitles(&request.subtitles);
+        let subtitle_only = request.subtitle_only && !subtitles.is_empty(); // 未选字幕时“仅字幕”无意义
         // 凭据只进入内存表；Job 上的四个字段一律留空，避免落盘与事件外泄。
         let credentials = JobCredentials::from_request(request);
         validate_extra_args(&credentials.extra_args, config.security.allow_commands)?;
@@ -211,15 +213,12 @@ impl Downloader {
                     cookies_browser: String::new(),
                     proxy: String::new(),
                     extra_args: String::new(),
+                    subtitles: subtitles.clone(),
+                    subtitle_only,
                     status: "queued".into(),
-                    progress: JobProgress::default(),
-                    log: Vec::new(),
-                    error: String::new(),
-                    file: String::new(),
                     created_at: stamp.clone(),
-                    started_at: String::new(),
-                    finished_at: String::new(),
                     has_credentials,
+                    ..Job::default()
                 };
                 if has_credentials {
                     inner

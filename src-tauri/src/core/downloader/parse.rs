@@ -277,6 +277,34 @@ fn truncate_chars(value: &str, max: usize) -> String {
 }
 
 pub(super) fn scan_output_file(job: &Job) -> String {
+    scan_newest(job, &MEDIA_EXTS)
+}
+
+/// 仅字幕任务不会产出媒体文件，用字幕文件兜底。
+pub(super) fn scan_subtitle_file(job: &Job) -> String {
+    scan_newest(job, &["srt", "vtt", "ass", "ssa"])
+}
+
+pub(super) fn has_subtitle_ext(file: &str) -> bool {
+    has_ext(Path::new(file), &["srt", "vtt", "ass", "ssa"])
+}
+
+/// 字幕文本是否以中文为主（CJK 字符不少于拉丁字母的三分之一）。
+/// 用于识别站点把英文内容标注成中文字幕的情况。
+pub(super) fn looks_chinese(text: &str) -> bool {
+    let mut cjk = 0usize;
+    let mut latin = 0usize;
+    for ch in text.chars() {
+        if ch.is_ascii_alphabetic() {
+            latin += 1;
+        } else if ('\u{4e00}'..='\u{9fff}').contains(&ch) {
+            cjk += 1;
+        }
+    }
+    cjk + latin > 0 && cjk * 3 >= latin
+}
+
+fn scan_newest(job: &Job, exts: &[&str]) -> String {
     let dir = Path::new(&job.out_dir);
     let since: SystemTime = match parse_time(&job.started_at) {
         Some(stamp) => (stamp - chrono::Duration::seconds(10)).into(),
@@ -287,7 +315,7 @@ pub(super) fn scan_output_file(job: &Job) -> String {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if !path.is_file() || !is_media(&path) {
+            if !path.is_file() || !has_ext(&path, exts) {
                 continue;
             }
             let Ok(metadata) = entry.metadata() else {
@@ -316,11 +344,11 @@ fn parse_time(value: &str) -> Option<chrono::DateTime<chrono::Local>> {
         .and_then(|naive| chrono::Local.from_local_datetime(&naive).single())
 }
 
-fn is_media(path: &Path) -> bool {
+fn has_ext(path: &Path, exts: &[&str]) -> bool {
     let ext = path
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
-    MEDIA_EXTS.contains(&ext.as_str())
+    exts.contains(&ext.as_str())
 }

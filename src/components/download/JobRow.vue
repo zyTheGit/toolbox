@@ -4,7 +4,8 @@
       <div class="job-main">
         <div class="mono job-url ellipsis" :title="job.url">{{ job.url }}</div>
         <div class="job-meta muted">
-          <span>{{ qualityLabel }}</span>
+          <span>{{ job.subtitleOnly ? "仅下载字幕" : qualityLabel }}</span>
+          <span v-if="subtitleLabel">{{ subtitleLabel }}</span>
           <span v-if="job.name" class="mono job-file ellipsis" :title="job.name">{{ job.name }}</span>
           <span>{{ createdText }}</span>
           <span v-if="job.file" class="mono job-file ellipsis" :title="job.file">{{ job.file }}</span>
@@ -56,6 +57,7 @@
       <div class="job-hint error-text">{{ failure.message }}</div>
       <div v-if="failure.action" class="job-hint hint">下一步：{{ failure.action }}</div>
     </template>
+    <div v-if="job.notice" class="job-hint notice-hint">{{ job.notice }}</div>
     <div v-if="needsCredentials" class="job-hint credentials-hint">
       <span class="credentials-tag">需重填凭据</span>
       <span>该任务使用了代理 / Cookie / Referer 等凭据，凭据只保存在内存中，重启后重试需要重新填写。</span>
@@ -128,6 +130,13 @@ const QUALITY_LABEL: Record<string, string> = {
   audio: "仅音频",
 };
 
+const SUBTITLE_LABEL: Record<string, string> = {
+  zh: "中文字幕",
+  "zh-mt": "中文机翻",
+  en: "英文字幕",
+  both: "中英字幕",
+};
+
 const isActive = computed(
   () => props.job.status === "queued" || props.job.status === "running",
 );
@@ -142,6 +151,7 @@ const needsCredentials = computed(
 );
 
 const FAILURE_RULES: Array<[RegExp, AppError["action"]]> = [
+  [/429|too many requests|rate.?limit|限流/i, "站点限流（YouTube 字幕常见）：等待几分钟后重试，或在高级选项里选择 Cookie 来源"],
   [/yt-dlp|ffmpeg|not found|未找到|找不到/, "到「设置 → 下载与工具」安装或更新工具"],
   [/permission|denied|拒绝访问|只读|read-only|权限/, "检查目录权限，或更换保存目录"],
   [/directory|folder|no such file|目录|路径/, "更换保存目录后重试"],
@@ -158,6 +168,7 @@ const failure = computed<AppError | null>(() => {
 });
 
 const qualityLabel = computed(() => QUALITY_LABEL[props.job.quality] ?? props.job.quality);
+const subtitleLabel = computed(() => SUBTITLE_LABEL[props.job.subtitles] ?? "");
 
 const percent = computed(() => {
   const value = Number(props.job.progress?.percent);
@@ -313,6 +324,16 @@ function remove(): void {
   background: #fff7e6;
   border: 1px solid #ffe1b3;
   color: #8a5a00;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.notice-hint {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #eef4ff;
+  border: 1px solid #d6e4ff;
+  color: #2b4a8a;
   font-size: 12px;
   line-height: 1.6;
 }

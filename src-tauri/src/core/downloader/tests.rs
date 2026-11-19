@@ -115,6 +115,16 @@ fn extra_flags_match_quality() {
 }
 
 #[test]
+fn detects_chinese_subtitle_content() {
+    assert!(looks_chinese("你好世界，这是中文字幕。"));
+    assert!(looks_chinese("中文 with 少量 English"));
+    assert!(!looks_chinese(
+        "President, Nvidia's investigating Jensen Huang's relationship."
+    ));
+    assert!(!looks_chinese(""));
+}
+
+#[test]
 fn strips_ansi_codes() {
     assert_eq!(strip_ansi("\u{1b}[32mok\u{1b}[0m"), "ok");
     assert_eq!(strip_ansi("plain"), "plain");
@@ -192,13 +202,50 @@ fn builds_output_template() {
 }
 
 #[test]
+fn subtitle_flags_follow_choice() {
+    assert!(subtitle_flags("", true, false).is_empty());
+    assert!(subtitle_flags("unknown", true, false).is_empty());
+    // 精确语言码：避免正则把机翻变体（zh-Hant-zh-CN 等）也请求下来。
+    assert_eq!(
+        subtitle_flags("zh", false, false).join(" "),
+        "--write-subs --write-auto-subs --sub-langs zh,zh-Hans,zh-Hant,zh-CN,zh-TW --sleep-subtitles 1"
+    );
+    let both = subtitle_flags("both", true, false).join(" ");
+    assert!(both.contains("--convert-subs srt"));
+    assert!(both.contains("--sub-langs zh,zh-Hans,zh-Hant,zh-CN,zh-TW,en,en-US,en-GB"));
+    assert!(!both.contains("zh.*"));
+    assert!(!both.contains("--skip-download"));
+
+    // 仅字幕：跳过媒体下载，字幕参数保持不变。
+    let only = subtitle_flags("en", false, true).join(" ");
+    assert!(only.contains("--skip-download"));
+    assert!(only.contains("--sub-langs en,en-US,en-GB"));
+
+    // 机翻中文：只匹配简体翻译轨，并等 60 秒规避 YouTube 的 429 限流。
+    let mt = subtitle_flags("zh-mt", false, false).join(" ");
+    assert!(mt.contains("--sub-langs zh-Hans-.*"));
+    assert!(mt.contains("--sleep-subtitles 60"));
+    assert!(!mt.contains("zh-CN,"));
+}
+
+#[test]
+fn normalizes_subtitle_choice() {
+    assert_eq!(normalize_subtitles(" zh "), "zh");
+    assert_eq!(normalize_subtitles("zh-mt"), "zh-mt");
+    assert_eq!(normalize_subtitles("both"), "both");
+    assert_eq!(normalize_subtitles("ALL"), "");
+}
+
+#[test]
 fn parses_download_request_options_over_ipc() {
     let request: DownloadRequest = serde_json::from_str(
-        r#"{"urls":["https://example.com/a.m3u8"],"quality":"best","fileName":"我的视频","threads":8}"#,
+        r#"{"urls":["https://example.com/a.m3u8"],"quality":"best","fileName":"我的视频","threads":8,"subtitles":"both","subtitleOnly":true}"#,
     )
     .unwrap();
     assert_eq!(request.file_name.as_deref(), Some("我的视频"));
     assert_eq!(request.threads, Some(8));
+    assert_eq!(request.subtitles, "both");
+    assert!(request.subtitle_only);
 }
 
 #[test]
@@ -216,6 +263,8 @@ fn persists_name_and_threads_without_breaking_old_jobs() {
     .unwrap();
     assert_eq!(legacy.name, "");
     assert_eq!(legacy.threads, 0);
+    assert!(legacy.subtitles.is_empty());
+    assert!(!legacy.subtitle_only);
 }
 
 #[test]

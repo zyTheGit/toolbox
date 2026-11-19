@@ -10,7 +10,9 @@ use crate::models::{Job, JobProgress, ToolStatus};
 
 use super::args::{render_redacted, validate_extra_args};
 use super::credentials::{JobCredentials, CREDENTIALS_MISSING};
-use super::naming::{effective_threads, extra_flags_for, format_for, now_string, output_template};
+use super::naming::{
+    effective_threads, extra_flags_for, format_for, now_string, output_template, subtitle_flags,
+};
 use super::parse::{failure_message, read_lines, split_args, tag_failure};
 use super::{Downloader, Finish};
 
@@ -138,11 +140,16 @@ impl Downloader {
 
         let output_template = output_template(&job);
         let threads = effective_threads(&job, &config);
+        let ffmpeg_ready = ffmpeg.ok && !ffmpeg.path.trim().is_empty();
+        // 仅字幕任务不选择媒体格式，也不做合并/转码。
+        let subtitle_only = job.subtitle_only && !job.subtitles.is_empty();
         let mut args: Vec<String> = vec![
             "--ignore-config".into(),
             "--newline".into(),
             "--no-mtime".into(),
             "--windows-filenames".into(),
+            // 分享链接按单个视频下载，避免 YouTube list 参数或 B 站多 P 被整包抓取。
+            "--no-playlist".into(),
             "--concurrent-fragments".into(),
             threads.to_string(),
             "--retries".into(),
@@ -151,15 +158,21 @@ impl Downloader {
             "10".into(),
             "-o".into(),
             output_template,
-            "-f".into(),
-            format_for(&job.quality).into(),
         ];
-        // 按档位附加参数：视频统一合并为 MP4，音频提取为 MP3。
-        for flag in extra_flags_for(&job.quality) {
-            args.push((*flag).into());
+        if !subtitle_only {
+            args.push("-f".into());
+            args.push(format_for(&job.quality).into());
+            // 按档位附加参数：视频统一合并为 MP4，音频提取为 MP3。
+            for flag in extra_flags_for(&job.quality) {
+                args.push((*flag).into());
+            }
+        }
+        // 字幕：站点无字幕时 yt-dlp 正常结束；ffmpeg 可用时统一转 SRT。
+        for flag in subtitle_flags(&job.subtitles, ffmpeg_ready, subtitle_only) {
+            args.push(flag);
         }
 
-        if ffmpeg.ok && !ffmpeg.path.trim().is_empty() {
+        if ffmpeg_ready {
             if let Some(parent) = Path::new(&ffmpeg.path).parent() {
                 args.push("--ffmpeg-location".into());
                 args.push(parent.to_string_lossy().to_string());

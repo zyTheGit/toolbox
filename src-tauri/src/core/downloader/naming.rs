@@ -35,6 +35,56 @@ pub(super) fn extra_flags_for(quality: &str) -> &'static [&'static str] {
     }
 }
 
+/// 校验字幕档位，未知值按“不下载”处理。
+pub(super) fn normalize_subtitles(value: &str) -> String {
+    match value.trim() {
+        "zh" | "zh-mt" | "en" | "both" => value.trim().to_string(),
+        _ => String::new(),
+    }
+}
+
+/// 字幕档位对应的 yt-dlp 参数；站点没有字幕时会正常结束。
+/// 手动与自动生成字幕一并尝试，能在 ffmpeg 可用时统一转成 SRT。
+/// `skip_download` 为真时只抓字幕，不下载视频/音频。
+///
+/// 使用精确语言码而不是 `zh.*` 正则：正则会把 YouTube 的机翻变体
+/// （如 zh-Hant-zh-CN）一并请求，请求数翻倍且容易触发 429。
+/// `--sleep-subtitles` 让多条字幕串行下载，降低被限流的概率。
+pub(super) fn subtitle_flags(
+    subtitles: &str,
+    convert_srt: bool,
+    skip_download: bool,
+) -> Vec<String> {
+    // 机翻轨必须等 60 秒再下载：YouTube 对“自动翻译字幕”接口限流，
+    // 官方给出的规避方式是 --sleep-subtitles 60（原字幕不受影响）。
+    let (langs, sleep) = match subtitles.trim() {
+        "zh" => ("zh,zh-Hans,zh-Hant,zh-CN,zh-TW", "1"),
+        "zh-mt" => ("zh-Hans-.*", "60"),
+        "en" => ("en,en-US,en-GB", "1"),
+        "both" => ("zh,zh-Hans,zh-Hant,zh-CN,zh-TW,en,en-US,en-GB", "1"),
+        _ => return Vec::new(),
+    };
+    let mut flags: Vec<String> = [
+        "--write-subs",
+        "--write-auto-subs",
+        "--sub-langs",
+        langs,
+        "--sleep-subtitles",
+        sleep,
+    ]
+    .iter()
+    .map(|item| (*item).to_string())
+    .collect();
+    if skip_download {
+        flags.push("--skip-download".into());
+    }
+    if convert_srt {
+        flags.push("--convert-subs".into());
+        flags.push("srt".into());
+    }
+    flags
+}
+
 pub(super) fn job_name(base: Option<&str>, index: usize, total: usize) -> String {
     let Some(base) = base else {
         return String::new();

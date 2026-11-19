@@ -10,7 +10,7 @@
     <EmptyState
       v-if="!store.jobs.length"
       title="暂无下载任务"
-      description="在上方粘贴 m3u8 或视频链接，点击开始下载后会在这里看到进度。"
+      description="在上方粘贴视频链接或分享文本，点击开始下载后会在这里看到进度。"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">

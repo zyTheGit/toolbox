@@ -65,6 +65,12 @@ pub struct Job {
     pub proxy: String,
     #[serde(default)]
     pub extra_args: String,
+    /// 字幕档位：空表示不下载，zh / en / both 对应中 / 英 / 中英。
+    #[serde(default)]
+    pub subtitles: String,
+    /// 仅下载字幕，不下载视频/音频（yt-dlp --skip-download）。
+    #[serde(default)]
+    pub subtitle_only: bool,
     pub status: String,
     pub progress: JobProgress,
     pub log: Vec<String>,
@@ -76,6 +82,9 @@ pub struct Job {
     /// 本次任务是否在内存中持有下载凭据（不落盘，默认 false）。
     #[serde(default)]
     pub has_credentials: bool,
+    /// 非致命提示，例如站点字幕语言与内容不符。
+    #[serde(default)]
+    pub notice: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -90,6 +99,9 @@ pub struct DownloadRequest {
     pub cookies_browser: String,
     pub proxy: String,
     pub extra_args: String,
+    pub subtitles: String,
+    /// 仅下载字幕，不下载视频/音频。
+    pub subtitle_only: bool,
 }
 
 impl Default for DownloadRequest {
@@ -104,6 +116,8 @@ impl Default for DownloadRequest {
             cookies_browser: String::new(),
             proxy: String::new(),
             extra_args: String::new(),
+            subtitles: String::new(),
+            subtitle_only: false,
         }
     }
 }

@@ -9,7 +9,10 @@ use crate::state::push_warning;
 use super::args::redact_text;
 use super::credentials::{strip_job, JobCredentials};
 use super::naming::now_string;
-use super::parse::{parse_file, parse_progress, scan_output_file};
+use super::parse::{
+    has_subtitle_ext, looks_chinese, parse_file, parse_progress, scan_output_file,
+    scan_subtitle_file,
+};
 use super::{Downloader, Finish, Inner};
 
 const MAX_LOG_LINES: usize = 400;
@@ -95,9 +98,31 @@ impl Downloader {
 
         if snapshot.status == "completed" && snapshot.file.trim().is_empty() {
             snapshot.file = scan_output_file(&snapshot);
+            if snapshot.file.is_empty() {
+                snapshot.file = scan_subtitle_file(&snapshot);
+            }
             let mut inner = self.inner.lock();
             if let Some(job) = inner.jobs.iter_mut().find(|item| item.id == id) {
                 job.file = snapshot.file.clone();
+            }
+        }
+
+        // 站点把非中文内容标成中文字幕时给出提示，避免误以为拿到了中文。
+        let zh_requested = matches!(snapshot.subtitles.as_str(), "zh" | "zh-mt");
+        if snapshot.status == "completed" && zh_requested && has_subtitle_ext(&snapshot.file) {
+            if let Ok(text) = std::fs::read_to_string(&snapshot.file) {
+                if !looks_chinese(&text) {
+                    snapshot.notice = if snapshot.subtitles == "zh" {
+                        "站点标注的中文字幕实际不是中文，可尝试「中文（YouTube 机翻）」".into()
+                    } else {
+                        "该视频的语音语言被站点标错，YouTube 机翻不会产出中文，建议下载原字幕后另行翻译"
+                            .into()
+                    };
+                    let mut inner = self.inner.lock();
+                    if let Some(job) = inner.jobs.iter_mut().find(|item| item.id == id) {
+                        job.notice = snapshot.notice.clone();
+                    }
+                }
             }
         }
 

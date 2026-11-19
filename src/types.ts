@@ -1,3 +1,6 @@
+export * from "./types/download";
+import type { Job } from "./types/download";
+
 export type ProviderId =
   | "microsoft"
   | "google"
@@ -6,13 +9,6 @@ export type ProviderId =
   | "baidu"
   | "youdao";
 export type Direction = "auto" | "zh2en" | "en2zh";
-export type JobStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed"
-  | "canceled"
-  | "interrupted";
 export type TaskType = "command" | "reminder";
 export type ScheduleKind = "cron" | "once";
 export type TaskStatus =
@@ -324,49 +320,6 @@ export interface ToolInstallResult {
   tools: ToolsStatus;
 }
 
-export interface JobProgress {
-  percent: number;
-  speed: string;
-  eta: string;
-  downloaded: string;
-  total: string;
-}
-
-export interface Job {
-  id: string;
-  url: string;
-  quality: string;
-  outDir: string;
-  name: string;
-  threads: number;
-  referer: string;
-  cookiesBrowser: string;
-  proxy: string;
-  extraArgs: string;
-  status: JobStatus;
-  progress: JobProgress;
-  log: string[];
-  error: string;
-  file: string;
-  createdAt: string;
-  startedAt: string;
-  finishedAt: string;
-  /** 是否在内存中持有下载凭据（不落盘，默认 false）。 */
-  hasCredentials?: boolean;
-}
-
-export interface DownloadRequest {
-  urls: string[];
-  quality: string;
-  outDir: string | null;
-  fileName: string | null;
-  threads: number | null;
-  referer: string;
-  cookiesBrowser: string;
-  proxy: string;
-  extraArgs: string;
-}
-
 export interface TaskPayload {
   url: string;
   quality: string;
@@ -464,9 +417,6 @@ export interface AppSnapshot {
 export interface ImportOutcome {
   restoredConfig: boolean; restoredHistory: number; restoredTasks: number; restoredJobs: number;
   disabledCommandTasks: number; backupPath: string; restartRequired: boolean;
-}
-export interface JobRetryRequest {
-  referer?: string; cookiesBrowser?: string; proxy?: string; extraArgs?: string; quality?: string; threads?: number;
 }
 export interface ConfigResult {
   config: AppConfig;

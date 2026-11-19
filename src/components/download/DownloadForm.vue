@@ -5,7 +5,7 @@
     <div class="field">
       <div class="label-row">
         <span class="label">下载地址</span>
-        <span class="hint">每行一个，仅支持 http(s)，自动去重</span>
+        <span class="hint">支持链接或分享文本，仅识别 http(s)，自动去重</span>
       </div>
       <n-input
         v-model:value="urlText"
@@ -13,7 +13,7 @@
         type="textarea"
         :rows="4"
         :disabled="submitting"
-        placeholder="https://example.com/live/index.m3u8&#10;每行一个地址，可批量入队"
+        placeholder="https://youtu.be/xxxx&#10;【视频标题】 https://b23.tv/xxxx&#10;https://x.com/user/status/xxxx&#10;每行一条，可批量入队"
       />
       <div class="hint">
         共 {{ parsed.valid.length }} 个有效链接<template v-if="parsed.invalid.length">，{{ parsed.invalid.length }} 行非法已忽略</template>
@@ -39,8 +39,23 @@
       </div>
       <div class="field">
         <span class="label">画质 / 格式</span>
-        <n-select v-model:value="quality" aria-label="画质与格式" :options="qualityOptions" />
-        <div class="hint">视频优先下载 MP4，音频提取为 MP3（需 ffmpeg）</div>
+        <n-select
+          v-model:value="quality"
+          aria-label="画质与格式"
+          :options="qualityOptions"
+          :disabled="subtitleOnly"
+        />
+        <div class="hint">
+          {{ subtitleOnly ? "仅字幕模式不下载视频/音频，画质设置不生效" : "视频优先下载 MP4，音频提取为 MP3（需 ffmpeg）" }}
+        </div>
+      </div>
+      <div class="field">
+        <span class="label">字幕</span>
+        <n-select v-model:value="subtitles" aria-label="字幕" :options="subtitleOptions" />
+        <n-checkbox v-model:checked="subtitleOnly" :disabled="!subtitles || submitting" size="small">
+          仅下载字幕（不下载视频）
+        </n-checkbox>
+        <div class="hint">{{ subtitleHint }}</div>
       </div>
       <div class="field">
         <span class="label">文件名</span>
@@ -87,16 +102,19 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { NButton, NInput, NSelect, useMessage } from "naive-ui";
+import { NButton, NCheckbox, NInput, NSelect, useMessage } from "naive-ui";
 import { api } from "../../api";
 import { store } from "../../store";
 import { describeError } from "../../utils/errors";
+import { extractUrls } from "../../utils/download-links";
 import { rememberCredentials } from "./sessionCredentials";
 
 const message = useMessage();
 
 const urlText = ref("");
 const quality = ref("best");
+const subtitles = ref("");
+const subtitleOnly = ref(false);
 const outDir = ref("");
 const outDirTouched = ref(false);
 const fileName = ref("");
@@ -113,6 +131,14 @@ const qualityOptions = [
   { label: "720p MP4 及以下", value: "720" },
   { label: "480p MP4 及以下", value: "480" },
   { label: "音频（MP3）", value: "audio" },
+];
+
+const subtitleOptions = [
+  { label: "不下载字幕", value: "" },
+  { label: "中文字幕（站点原字幕）", value: "zh" },
+  { label: "中文（YouTube 机翻）", value: "zh-mt" },
+  { label: "英文字幕", value: "en" },
+  { label: "中英字幕", value: "both" },
 ];
 
 const cookieOptions = [
@@ -138,20 +164,26 @@ watch(
   { immediate: true },
 );
 
+watch(subtitles, (value) => {
+  if (!value) subtitleOnly.value = false;
+});
+
 const parsed = computed(() => {
   const seen = new Set<string>();
   const valid: string[] = [];
   const invalid: string[] = [];
   for (const raw of urlText.value.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || seen.has(line)) continue;
-    seen.add(line);
-    try {
-      const url = new URL(line);
-      if (url.protocol === "http:" || url.protocol === "https:") valid.push(line);
-      else invalid.push(line);
-    } catch {
+    if (!line) continue;
+    const found = extractUrls(line);
+    if (!found.length) {
       invalid.push(line);
+      continue;
+    }
+    for (const url of found) {
+      if (seen.has(url)) continue;
+      seen.add(url);
+      valid.push(url);
     }
   }
   return { valid, invalid };
@@ -162,14 +194,25 @@ const invalidPreview = computed(() => {
   return parsed.value.invalid.length > 3 ? `${preview} 等` : preview;
 });
 
+const subtitleHint = computed(() => {
+  if (subtitleOnly.value) return "只保存字幕文件，站点的自动字幕也会尝试";
+  if (subtitles.value === "zh-mt") return "简体中文机翻，需先等约 60 秒规避 YouTube 限流；原字幕语言标错时可能无效";
+  return "尝试下载站点字幕并转 SRT（YouTube 等，转换需 ffmpeg）";
+});
+
 const ytdlpReady = computed(() => Boolean(store.tools?.ytdlp.ok));
 
 const canSubmit = computed(
-  () => ytdlpReady.value && parsed.value.valid.length > 0 && !submitting.value,
+  () =>
+    ytdlpReady.value &&
+    parsed.value.valid.length > 0 &&
+    !submitting.value &&
+    (!subtitleOnly.value || Boolean(subtitles.value)),
 );
 
 const footHint = computed(() => {
   if (!ytdlpReady.value) return "未检测到 yt-dlp，请到「设置 → 下载与工具」中安装";
+  if (subtitleOnly.value && !subtitles.value) return "仅下载字幕需要先选择字幕语言";
   if (parsed.value.invalid.length > 0) return `提交时忽略 ${parsed.value.invalid.length} 行非法链接`;
   if (parsed.value.valid.length > 0) return `将加入 ${parsed.value.valid.length} 个下载任务`;
   return "粘贴链接后可开始下载";
@@ -198,6 +241,8 @@ async function submit(): Promise<void> {
     const jobs = await api.downloadEnqueue({
       urls: parsed.value.valid,
       quality: quality.value,
+      subtitles: subtitles.value,
+      subtitleOnly: subtitleOnly.value,
       outDir: outDir.value.trim() || null,
       fileName: fileName.value.trim() || null,
       threads: null,
