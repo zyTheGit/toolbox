@@ -56,6 +56,14 @@ winreg = "0.56"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# 控制 dev 构建产物体积：关闭本地 crate 的增量缓存（incremental 目录会随开发持续增大），
+# 并去掉依赖的调试符号（Windows 下 PDB 体积占大头）。需要逐步调试 Rust 时临时改回即可。
+[profile.dev]
+incremental = false
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 panic = "abort"
 codegen-units = 1
