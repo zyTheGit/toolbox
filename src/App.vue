@@ -137,11 +137,6 @@ const navItems: Array<{ key: PageKey; label: string; icon: string }> = [
     icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/><path d="M4 4l1.5 3"/><path d="M20 4l-1.5 3"/></svg>',
   },
   {
-    key: "download",
-    label: "m3u8 下载",
-    icon: '<svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 18h16"/><path d="M4 20h16"/></svg>',
-  },
-  {
     key: "dev",
     label: "开发工具",
     icon: '<svg viewBox="0 0 24 24"><path d="M8 6l-5 6 5 6"/><path d="M16 6l5 6-5 6"/><path d="M13.5 4l-3 16"/></svg>',
@@ -155,6 +150,11 @@ const navItems: Array<{ key: PageKey; label: string; icon: string }> = [
     key: "ai",
     label: "AI 工具",
     icon: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg>',
+  },
+  {
+    key: "download",
+    label: "下载",
+    icon: '<svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 18h16"/><path d="M4 20h16"/></svg>',
   },
   {
     key: "settings",
