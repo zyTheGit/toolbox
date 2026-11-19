@@ -20,6 +20,11 @@ use super::{ActiveRun, Core};
 const MAX_COMMAND_QUEUE: usize = 5;
 const DUE_GRACE_SECONDS: i64 = 90;
 
+/// 列表与事件统一按更新时间倒序，避免事件全量覆盖时卡片顺序跳变。
+pub(super) fn sort_tasks(tasks: &mut [Task]) {
+    tasks.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+}
+
 pub(super) fn tick(core: &Arc<Core>) {
     if core.paused.load(Ordering::SeqCst) || core.stopped.load(Ordering::SeqCst) { return; }
     let now = Local::now();
@@ -140,7 +145,8 @@ pub(super) fn tick(core: &Arc<Core>) {
 
 impl Core {
     pub(super) fn emit_tasks(&self) {
-        let tasks = self.tasks.lock().clone();
+        let mut tasks = self.tasks.lock().clone();
+        sort_tasks(&mut tasks);
         let _ = self.app.emit("tasks-updated", tasks);
     }
 
@@ -153,8 +159,9 @@ impl Core {
         if let Err(err) = self.store.save(tasks.as_slice()) {
             push_warning(&self.warnings, err);
         }
-        let snapshot = (*tasks).clone();
+        let mut snapshot = (*tasks).clone();
         drop(tasks);
+        sort_tasks(&mut snapshot);
         let _ = self.app.emit("tasks-updated", snapshot);
     }
 

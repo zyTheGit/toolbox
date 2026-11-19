@@ -45,7 +45,7 @@
       v-model:show="formShow"
       :task="editing"
       :allow-commands="allowCommands"
-      @saved="refreshTasks"
+      @saved="syncTasks"
     />
 
     <TaskRunsDrawer ref="runsDrawer" v-model:show="runsShow" :task="runsTask" />
@@ -104,6 +104,11 @@ async function refreshTasks(): Promise<void> {
   }
 }
 
+// 事件桥正常时由 tasks-updated 推送，避免命令返回后再整表拉取造成重复刷新。
+async function syncTasks(): Promise<void> {
+  if (!store.eventsOk) await refreshTasks();
+}
+
 async function togglePaused(): Promise<void> {
   pausing.value = true;
   try {
@@ -150,7 +155,7 @@ async function handleToggle(task: Task, enabled: boolean): Promise<void> {
   busy[task.id] = "toggle";
   try {
     await api.taskUpdate(task.id, { ...taskToInput(task), enabled });
-    await refreshTasks();
+    await syncTasks();
   } catch (err) {
     message.error(errorText(err));
   } finally {
@@ -172,7 +177,7 @@ async function handleRun(task: Task): Promise<void> {
     } else {
       message.success("已开始运行");
     }
-    await refreshTasks();
+    await syncTasks();
     if (runsShow.value && runsTask.value?.id === task.id) {
       void runsDrawer.value?.refresh();
     }
@@ -189,7 +194,7 @@ async function handleCancel(task: Task): Promise<void> {
   try {
     await api.taskCancel(task.id);
     message.success("已请求取消");
-    await refreshTasks();
+    await syncTasks();
   } catch (err) {
     message.error(errorText(err));
   } finally {
@@ -207,7 +212,7 @@ async function handleDelete(task: Task): Promise<void> {
       runsShow.value = false;
       runsTask.value = null;
     }
-    await refreshTasks();
+    await syncTasks();
   } catch (err) {
     message.error(errorText(err));
   } finally {

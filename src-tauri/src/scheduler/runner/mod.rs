@@ -5,7 +5,7 @@
 mod engine;
 mod schedule;
 
-use engine::{tick, try_reserve_queue};
+use engine::{sort_tasks, tick, try_reserve_queue};
 use schedule::{
     build_run, command_of, compute_next, new_id, normalize_input, now_string, preview_cron,
 };
@@ -185,7 +185,7 @@ impl Scheduler {
 
     pub fn list(&self) -> Vec<Task> {
         let mut tasks = self.core.tasks.lock().clone();
-        tasks.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        sort_tasks(&mut tasks);
         tasks
     }
 
