@@ -29,6 +29,7 @@
     <div class="task-side">
       <n-switch
         :value="task.enabled"
+        :loading="busyAction === 'toggle'"
         :disabled="task.running || busy"
         @update:value="onToggle"
       />
@@ -61,7 +62,15 @@
           @positive-click="emit('delete')"
         >
           <template #trigger>
-            <n-button size="small" type="error" ghost :disabled="task.running || busy">删除</n-button>
+            <n-button
+              size="small"
+              type="error"
+              ghost
+              :loading="busyAction === 'delete'"
+              :disabled="task.running || busy"
+            >
+              删除
+            </n-button>
           </template>
           删除任务「{{ displayName }}」？运行记录也会一并移除。
         </n-popconfirm>
