@@ -1,12 +1,12 @@
 {
   "limit": 400,
-  "updatedAt": "2026-11-18",
+  "updatedAt": "2026-11-19",
   "note": "存量超限文件基线，只允许变小；新增超限文件直接失败。由 scripts/check-file-length.mjs --update 生成。",
   "files": {
     "src-tauri/src/core/secrets.rs": 500,
     "src/components/tasks/TaskFormModal.vue": 993,
-    "src/types.ts": 478,
+    "src/types.ts": 428,
     "src/views/SettingsView.vue": 919,
-    "src/views/TranslateView.vue": 686
+    "src/views/TranslateView.vue": 635
   }
 }

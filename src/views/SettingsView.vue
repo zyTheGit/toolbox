@@ -154,11 +154,11 @@
               <span v-else class="hint">没有可选的回退服务。</span>
             </div>
             <div class="field">
-              <span class="field-label">译文朗读倍率</span>
+              <span class="field-label">朗读倍率</span>
               <n-select
                 v-model:value="draft.translate.ttsRate"
                 class="rate-input"
-                aria-label="译文朗读倍率"
+                aria-label="朗读倍率"
                 :options="ttsRateOptions"
               />
             </div>

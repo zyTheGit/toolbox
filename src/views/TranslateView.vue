@@ -47,6 +47,15 @@
             </n-button>
           </span>
           <div class="row">
+            <n-button
+              size="small"
+              quaternary
+              :disabled="loading || !input.trim()"
+              :title="sourceSpeaking ? '停止朗读' : '朗读原文'"
+              @click="toggleSpeak('source')"
+            >
+              {{ sourceSpeaking ? "停止" : "朗读" }}
+            </n-button>
             <n-button size="small" quaternary :disabled="loading || !input" @click="clearInput">
               清空
             </n-button>
@@ -103,10 +112,10 @@
               size="small"
               quaternary
               :disabled="!result || loading"
-              :title="speaking ? '停止朗读' : '朗读译文'"
-              @click="toggleSpeak"
+              :title="targetSpeaking ? '停止朗读' : '朗读译文'"
+              @click="toggleSpeak('target')"
             >
-              {{ speaking ? "停止" : "朗读" }}
+              {{ targetSpeaking ? "停止" : "朗读" }}
             </n-button>
             <n-button size="small" quaternary :disabled="!result || loading" @click="copyResult">
               复制译文
@@ -181,6 +190,7 @@ import PageHead from "../components/PageHead.vue";
 import EmptyState from "../components/EmptyState.vue";
 import HistoryItem from "../components/translate/HistoryItem.vue";
 import HistoryDrawer from "../components/translate/HistoryDrawer.vue";
+import { detectLang, ttsLang, useSpeechPlayback } from "../composables/useSpeechPlayback";
 
 const message = useMessage();
 
@@ -192,7 +202,6 @@ const loading = ref(false);
 const error = ref("");
 const result = ref<TranslateResult | null>(null);
 const loadedEntry = ref<HistoryEntry | null>(null);
-const speaking = ref(false);
 const undoSnapshot = ref<{ input: string; direction: string } | null>(null);
 let undoTimer: ReturnType<typeof setTimeout> | undefined;
 const undoAvailable = computed(() => undoSnapshot.value !== null);
@@ -243,90 +252,29 @@ function errorText(err: unknown): string {
   return describeError(err);
 }
 
-const TTS_LANG: Record<string, string> = { zh: "zh-CN", en: "en-US" };
-
 const ttsRate = computed(() => {
   const saved = Number(store.config?.translate.ttsRate ?? 1);
   return Number.isFinite(saved) ? Math.min(2, Math.max(0.5, saved)) : 1;
 });
 
-let speechSeq = 0;
+const { speakingSide, toggle: toggleSpeech, stop: stopSpeaking } = useSpeechPlayback(ttsRate);
 
-function speechSupported(): boolean {
-  return typeof window !== "undefined" && "speechSynthesis" in window;
-}
+const sourceSpeaking = computed(() => speakingSide.value === "source");
+const targetSpeaking = computed(() => speakingSide.value === "target");
 
-function pickVoice(lang: string): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis.getVoices();
-  const normalized = lang.toLowerCase();
-  const prefix = normalized.slice(0, 2);
-  return (
-    voices.find((voice) => voice.lang.replace("_", "-").toLowerCase() === normalized) ??
-    voices.find((voice) => voice.lang.toLowerCase().startsWith(prefix)) ??
-    null
-  );
-}
+const sourceTtsLang = computed(() => {
+  if (direction.value === "zh2en") return ttsLang("zh");
+  if (direction.value === "en2zh") return ttsLang("en");
+  return ttsLang(detectLang(input.value));
+});
 
-function splitForSpeech(text: string): string[] {
-  const chunks: string[] = [];
-  const boundaries = ["。", "！", "？", "；", ". ", "! ", "? ", "; ", "\n"];
-  let rest = text.trim();
-  while (rest.length > 220) {
-    const head = rest.slice(0, 220);
-    let cut = -1;
-    for (const mark of boundaries) {
-      cut = Math.max(cut, head.lastIndexOf(mark));
-    }
-    if (cut < 60) cut = 219;
-    chunks.push(rest.slice(0, cut + 1).trim());
-    rest = rest.slice(cut + 1).trim();
-  }
-  if (rest) chunks.push(rest);
-  return chunks.filter(Boolean);
-}
-
-function stopSpeaking(): void {
-  speechSeq += 1;
-  speaking.value = false;
-  if (speechSupported()) window.speechSynthesis.cancel();
-}
-
-function speakResult(): void {
-  if (!result.value) return;
-  if (!speechSupported()) {
+function toggleSpeak(side: "source" | "target"): void {
+  const text = side === "source" ? input.value : result.value?.text ?? "";
+  if (!text.trim()) return;
+  const lang = side === "source" ? sourceTtsLang.value : ttsLang(result.value?.target ?? "zh");
+  if (!toggleSpeech(text, lang, side)) {
     message.warning("当前环境不支持语音播放");
-    return;
   }
-
-  const chunks = splitForSpeech(result.value.text);
-  if (!chunks.length) return;
-
-  const lang = TTS_LANG[result.value.target] ?? "zh-CN";
-  const voice = pickVoice(lang);
-  const seq = ++speechSeq;
-  window.speechSynthesis.cancel();
-  speaking.value = true;
-
-  chunks.forEach((chunk, index) => {
-    const utterance = new SpeechSynthesisUtterance(chunk);
-    utterance.lang = lang;
-    if (voice) utterance.voice = voice;
-    utterance.rate = ttsRate.value;
-    const finish = (): void => {
-      if (seq === speechSeq && index === chunks.length - 1) speaking.value = false;
-    };
-    utterance.onend = finish;
-    utterance.onerror = finish;
-    window.speechSynthesis.speak(utterance);
-  });
-}
-
-function toggleSpeak(): void {
-  if (speaking.value) {
-    stopSpeaking();
-    return;
-  }
-  speakResult();
 }
 
 function swapDirection(): void {
@@ -501,8 +449,9 @@ watch(historyEnabled, () => {
   void refreshRecent();
 });
 
-watch(ttsRate, () => {
-  if (speaking.value) speakResult();
+// 原文被编辑或方向切换后，正在朗读的旧文本立即停止。
+watch([input, direction], () => {
+  if (speakingSide.value === "source") stopSpeaking();
 });
 
 let quickUnlisten: (() => void) | undefined;
