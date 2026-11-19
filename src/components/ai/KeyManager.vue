@@ -75,7 +75,15 @@
       </label>
       <label class="field">
         <span class="field-label">过期日期（可选）</span>
-        <n-input v-model:value="editor.expiresOn" placeholder="YYYY-MM-DD" maxlength="10" />
+        <n-date-picker
+          class="expiry-picker"
+          type="date"
+          value-format="yyyy-MM-dd"
+          clearable
+          :formatted-value="editor.expiresOn || null"
+          placeholder="选择过期日期"
+          @update:formatted-value="editor.expiresOn = $event ?? ''"
+        />
       </label>
       <label class="field">
         <span class="field-label">备注（可选）</span>
@@ -93,7 +101,16 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { NButton, NInput, NModal, NSpin, NTag, useDialog, useMessage } from "naive-ui";
+import {
+  NButton,
+  NDatePicker,
+  NInput,
+  NModal,
+  NSpin,
+  NTag,
+  useDialog,
+  useMessage,
+} from "naive-ui";
 import { api } from "../../api";
 import { loadSecretEntries, loadSnapshot, store } from "../../store";
 import { describeError } from "../../utils/errors";
@@ -330,6 +347,9 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 500;
   color: #4b5468;
+}
+.expiry-picker {
+  width: 100%;
 }
 .modal-foot {
   display: flex;
