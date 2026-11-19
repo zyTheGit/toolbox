@@ -162,12 +162,6 @@ impl Core {
         let _ = self.app.emit("task-run-updated", run.clone());
     }
 
-    fn notify(&self, title: &str, body: &str) -> Result<(), String> {
-        use tauri_plugin_notification::NotificationExt;
-        self.app.notification().builder().title(title).body(body).show()
-            .map_err(|err| err.to_string())
-    }
-
     pub(super) fn append_run_and_emit(&self, run: &TaskRun) {
         if let Err(err) = self.store.append_run(run) {
             push_warning(&self.warnings, err);
@@ -259,6 +253,7 @@ impl Core {
             crate::core::notify::notify(
                 &self.app,
                 "tasks",
+                Some(&task.id),
                 title,
                 &format!("{label}：点击查看运行记录"),
             );
@@ -281,7 +276,7 @@ async fn execute_reminder(core: &Arc<Core>, task: &Task) -> ExecOutcome {
         message.to_string()
     };
 
-    match core.notify(&title, &body) {
+    match crate::core::notify::notify_task(&core.app, &task.id, &title, &body) {
         Ok(()) => ExecOutcome {
             status: "success",
             exit_code: None,

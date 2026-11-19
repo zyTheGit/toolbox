@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { NAlert, NButton, useMessage } from "naive-ui";
 import { api, events } from "../api";
 import { store } from "../store";
@@ -130,6 +130,20 @@ function openRuns(task: Task): void {
   runsTask.value = task;
   runsShow.value = true;
 }
+
+// 通知点击可能早于任务列表加载，等任务数据就绪后再定位。
+watch(
+  () => [store.pendingTaskId, store.tasks] as const,
+  () => {
+    const id = store.pendingTaskId;
+    if (!id) return;
+    const task = store.tasks.find((item) => item.id === id);
+    if (!task) return;
+    store.pendingTaskId = null;
+    openRuns(task);
+  },
+  { immediate: true },
+);
 
 async function handleToggle(task: Task, enabled: boolean): Promise<void> {
   if (busy[task.id]) return;

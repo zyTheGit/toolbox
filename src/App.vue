@@ -192,7 +192,9 @@ async function attachEvents(): Promise<void> {
   unlisteners = await connectEvents();
   try {
     const off = await events.onNavigate((target) => {
-      if (isPage(target)) page.value = target;
+      if (!isPage(target.page)) return;
+      store.pendingTaskId = target.taskId ?? null;
+      page.value = target.page;
     });
     unlisteners.push(off);
   } catch {

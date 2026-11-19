@@ -33,6 +33,8 @@ interface StoreState {
   toolProgress: Record<string, ToolProgress>;
   eventsOk: boolean;
   eventsError: string;
+  /** 通知点击后待定位的任务 id，任务页消费后清空。 */
+  pendingTaskId: string | null;
 }
 
 export const store = reactive<StoreState>({
@@ -55,6 +57,7 @@ export const store = reactive<StoreState>({
   toolProgress: {},
   eventsOk: false,
   eventsError: "",
+  pendingTaskId: null,
 });
 
 export function applySnapshot(snapshot: AppSnapshot): void {

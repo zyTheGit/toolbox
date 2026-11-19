@@ -31,6 +31,7 @@ import type {
   TranslateRequest,
   TranslateResult,
 } from "./types";
+import type { NavTarget } from "./types/nav";
 
 export const api = {
   snapshot: () => invoke<AppSnapshot>("get_app_snapshot"),
@@ -113,8 +114,8 @@ export const events = {
     listen<ToolProgress>("tool-progress", (e) => cb(e.payload)),
   onTasksPaused: (cb: (paused: boolean) => void): Promise<UnlistenFn> =>
     listen<boolean>("tasks-paused", (e) => cb(e.payload)),
-  onNavigate: (cb: (page: string) => void): Promise<UnlistenFn> =>
-    listen<string>("navigate", (e) => cb(e.payload)),
+  onNavigate: (cb: (target: NavTarget) => void): Promise<UnlistenFn> =>
+    listen<NavTarget>("navigate", (e) => cb(e.payload)),
   onQuickTranslate: (cb: (text: string) => void): Promise<UnlistenFn> =>
     listen<string>("quick-translate", (e) => cb(e.payload)),
 };

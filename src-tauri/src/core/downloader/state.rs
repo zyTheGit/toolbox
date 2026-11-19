@@ -147,12 +147,13 @@ impl Downloader {
             };
             if snapshot.status == "completed" {
                 if let Some(app) = &self.app {
-                    crate::core::notify::notify(app, "download", "下载完成", &label);
+                    crate::core::notify::notify(app, "download", None, "下载完成", &label);
                 }
             } else if let Some(app) = &self.app {
                 crate::core::notify::notify(
                     app,
                     "download",
+                    None,
                     "下载失败",
                     &format!("{label}：点击查看原因"),
                 );
