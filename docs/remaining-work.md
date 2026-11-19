@@ -1,6 +1,21 @@
 # 待办与未完成事项
 
-整理时间：2026-11-18（T8 文档验收更新）。范围：0.1.0 发版前未完成的工作、已知问题与规划中未启动的功能。第 7 节四项规划功能已于 2026-11-17 完成实现；T0-T7 的改造与验证记录见 `docs/交接文档-2026-11-17.md` 附录 C。
+整理时间：2026-11-19（0.2.0 发版更新）。0.2.0 新增下载分享文本与站点字幕、原文/译文双朗读；0.1.0 的遗留待办见第 1 节。
+
+## 0. 0.2.0 发版（草稿已就绪，待发布）
+
+| 项目 | 状态 |
+| --- | --- |
+| 版本号 | 三处均为 `0.2.0`，`node scripts/check-version.mjs` 通过 |
+| 代码提交 | 截至 `0405f63`，按功能拆分为 `8bf5b54`、`5aa30b8`、`5d99ccd`、`2b699ae`、`9a9759f`、`0405f63` |
+| CI 门禁 | run `44471022882` 四平台全绿（frontend + Windows / macOS / Ubuntu Rust） |
+| tag | `v0.2.0`（annotated）已推送，指向 `0405f63` |
+| 发版构建 | Release run `44473244426` 四平台全绿 |
+| 草稿 Release | `Toolbox v0.2.0`（draft、非预发布），NSIS、便携版 zip、两个 dmg、两个 app.tar.gz、deb、AppImage 与 4 份 `SHA256SUMS-*.txt` 齐全 |
+| 产物复核 | 已下载 Windows 安装包与便携包，哈希与 `SHA256SUMS-windows-x64.txt` 一致（`a52b6b47…` / `0592a54a…`） |
+| 安装冒烟 | 已完成：安装/启动、7 页渲染、关闭窗口隐藏、单实例唤起、开机自启开关（注册表项验证后已恢复）、便携版启动 |
+| 描述 | 已按新增 / 改动 / 优化 / 兼容性分节填写 |
+| 待办 | 人工点击 Publish release；托盘菜单项交互、备份导入导出、快捷翻译快捷键、下载目录切换未做自动化验证 |
 
 ## 1. 0.1.0 发版（已发布，NSIS 安装冒烟待补做）
 
@@ -84,19 +99,19 @@
 
 ## 3. 超过 400 行的文件
 
-项目要求单文件不超过 400 行。T0 已将存量超限文件写入 `scripts/file-length-baseline.json`：基线只允许变小，新增超限文件直接失败。2026-11-18 实测：
+项目要求单文件不超过 400 行。T0 已将存量超限文件写入 `scripts/file-length-baseline.json`：基线只允许变小，新增超限文件直接失败。2026-11-19 实测：
 
 | 文件 | 行数 | 建议拆分 |
 | --- | --- | --- |
 | `src/components/tasks/TaskFormModal.vue` | 993 | cron 配置块、命令高级选项、表单逻辑 composable |
 | `src/views/SettingsView.vue` | 919 | 工具安装卡片、服务商配置卡片、关于卡片 |
-| `src/views/TranslateView.vue` | 686 | 输入区、结果区、语言选择栏 |
+| `src/views/TranslateView.vue` | 635 | 输入区、结果区、语言选择栏（朗读逻辑已抽到 composable） |
 | `src-tauri/src/core/secrets.rs` | 500 | 编解码、条目管理、迁移逻辑 |
-| `src/types.ts` | 478 | 按域拆分类型（AI / 下载 / 任务 / 设置） |
+| `src/types.ts` | 428 | 按域拆分类型（AI / 任务 / 设置；下载域已拆到 `src/types/download.ts`） |
 
 `src-tauri/src/scheduler/runner/engine.rs` 已收窄到 397 行并移出基线。
 
-行数以 `node scripts/check-file-length.mjs` 输出为准（并行开发期间可能变动）；拆分收窄后运行 `--update` 更新基线。拆分属纯结构调整，需独立提交、逐次 `npm run typecheck` 与 `npm run test` 验证；完整拆分计划在 0.2.0。
+行数以 `node scripts/check-file-length.mjs` 输出为准（并行开发期间可能变动）；拆分收窄后运行 `--update` 更新基线。拆分属纯结构调整，需独立提交、逐次 `npm run typecheck` 与 `npm run test` 验证；0.2.0 已拆出下载类型与朗读逻辑，其余完整拆分计划顺延至 0.3.0。
 
 ## 4. 前端体积告警（已解决）
 
