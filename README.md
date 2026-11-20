@@ -2,6 +2,8 @@
 
 面向 Windows / macOS / Linux 的桌面工具箱（Windows 为主验证平台），基于 Tauri 2 + Vue 3 + Naive UI。提供中英文翻译、视频下载和通用定时任务，并附带开发工具、AI 调试台与数据库浏览器；常驻系统托盘并支持开机自启。
 
+![Toolbox 定时任务界面](assets/screenshot-tasks.png)
+
 ## 功能要点
 
 ### 翻译
