@@ -1,23 +1,17 @@
 <template>
-  <div ref="rootEl" class="hist-item" :class="{ compact }">
-    <div class="hist-main">
-      <div ref="textEl" class="hist-text" :class="clampClass">{{ entry.text }}</div>
-      <div ref="resultEl" class="hist-result" :class="clampClass">{{ entry.result }}</div>
-      <div class="hist-meta muted">
-        <span class="mono">{{ formatTime(entry.createdAt) }}</span>
-        <span class="sep">·</span>
-        <span>{{ entry.providerName }}</span>
-        <span class="sep">·</span>
-        <span>{{ langLabel(entry.source) }} → {{ langLabel(entry.target) }}</span>
-        <n-button v-if="overflowing" class="expand-btn" text size="tiny" @click="toggleExpand">
-          {{ expanded ? "收起" : "展开" }}
-        </n-button>
-      </div>
+  <div class="hist-row" :class="{ compact }">
+    <span class="tag dir-tag">{{ directionLabel }}</span>
+    <div class="hist-texts" :title="`${entry.text}\n${entry.result || '（无译文）'}`">
+      <span class="src ellipsis">{{ entry.text }}</span>
+      <span class="dst ellipsis" :class="{ empty: !entry.result }">
+        {{ entry.result || "（无译文）" }}
+      </span>
     </div>
-
+    <span class="hint time">{{ formatTime(entry.createdAt) }}</span>
     <div class="hist-actions">
       <n-button
         class="star-btn"
+        :class="{ faved: entry.favorite }"
         quaternary
         circle
         size="small"
@@ -25,28 +19,59 @@
         :aria-label="entry.favorite ? '取消收藏' : '收藏'"
         @click="emit('favorite')"
       >
-        <span class="star" :class="{ on: entry.favorite }">{{ entry.favorite ? "★" : "☆" }}</span>
+        <AppIcon name="star" :size="16" />
       </n-button>
-      <n-button text size="small" @click="emit('load')">载入</n-button>
+      <n-button
+        quaternary
+        circle
+        size="small"
+        title="载入到翻译"
+        aria-label="载入到翻译"
+        @click="emit('load')"
+      >
+        <AppIcon name="upload" :size="16" />
+      </n-button>
+      <n-button
+        quaternary
+        circle
+        size="small"
+        :disabled="!entry.result"
+        title="复制译文"
+        aria-label="复制译文"
+        @click="emit('copy')"
+      >
+        <AppIcon name="copy" :size="16" />
+      </n-button>
       <n-button
         v-if="!compact"
-        text
+        quaternary
+        circle
         size="small"
         :loading="retranslating"
         :disabled="retranslating"
+        title="重译"
+        aria-label="重译"
         @click="emit('retranslate')"
       >
-        重译
+        <AppIcon v-if="!retranslating" name="refresh" :size="16" />
       </n-button>
-      <n-button v-if="!compact" text size="small" @click="emit('copy')">复制</n-button>
-      <span v-if="!compact" class="action-sep" aria-hidden="true"></span>
       <n-popconfirm
+        v-if="!compact"
         positive-text="删除"
         negative-text="取消"
         @positive-click="emit('delete')"
       >
         <template #trigger>
-          <n-button text size="small" type="error">删除</n-button>
+          <n-button
+            quaternary
+            circle
+            size="small"
+            type="error"
+            title="删除"
+            aria-label="删除"
+          >
+            <AppIcon name="trash" :size="16" />
+          </n-button>
         </template>
         删除这条翻译记录？
       </n-popconfirm>
@@ -55,9 +80,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed } from "vue";
 import { NButton, NPopconfirm } from "naive-ui";
 import type { HistoryEntry } from "../../types";
+import AppIcon from "../AppIcon.vue";
 
 const props = defineProps<{ entry: HistoryEntry; compact?: boolean; retranslating?: boolean }>();
 
@@ -69,183 +95,103 @@ const emit = defineEmits<{
   (e: "delete"): void;
 }>();
 
-const LANG_LABELS: Record<string, string> = { zh: "中文", en: "英文" };
-
-const expanded = ref(false);
-const overflowing = ref(false);
-const rootEl = ref<HTMLElement | null>(null);
-const textEl = ref<HTMLElement | null>(null);
-const resultEl = ref<HTMLElement | null>(null);
-
-const clampClass = computed(() => {
-  if (expanded.value) return "";
-  return props.compact ? "clamp-1" : "clamp-2";
+const directionLabel = computed(() => {
+  const { source, target, direction } = props.entry;
+  if (source === "zh" && target === "en") return "中译英";
+  if (source === "en" && target === "zh") return "英译中";
+  if (direction === "zh2en") return "中译英";
+  if (direction === "en2zh") return "英译中";
+  return "自动";
 });
 
-function measure(): void {
-  if (expanded.value) return;
-  const els = [textEl.value, resultEl.value];
-  overflowing.value = els.some((el) => !!el && el.scrollHeight - el.clientHeight > 1);
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
-function remeasure(): void {
-  void nextTick(measure);
-}
-
-function toggleExpand(): void {
-  expanded.value = !expanded.value;
-  if (!expanded.value) remeasure();
-}
-
-let resizeObserver: ResizeObserver | undefined;
-
-watch(
-  () => props.entry.id,
-  () => {
-    expanded.value = false;
-    remeasure();
-  },
-);
-
-onMounted(() => {
-  remeasure();
-  if (typeof ResizeObserver !== "undefined" && rootEl.value) {
-    resizeObserver = new ResizeObserver(() => measure());
-    resizeObserver.observe(rootEl.value);
-  }
-});
-
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect();
-  resizeObserver = undefined;
-});
-
+/** 近期用「今天 / 昨天」，同年用月日，跨年补全年份。 */
 function formatTime(iso: string): string {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
-}
-
-function langLabel(code: string): string {
-  if (!code) return "—";
-  return LANG_LABELS[code] ?? code.toUpperCase();
+  const clock = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const time = date.getTime();
+  if (time >= todayStart) return `今天 ${clock}`;
+  if (time >= todayStart - 24 * 60 * 60 * 1000) return `昨天 ${clock}`;
+  const day = `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  if (date.getFullYear() !== now.getFullYear()) return `${date.getFullYear()}-${day}`;
+  return `${day} ${clock}`;
 }
 </script>
 
 <style scoped>
-.hist-item {
+.hist-row {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
 }
 
-.hist-item:last-child {
+.hist-row:last-child {
   border-bottom: 0;
 }
 
-.hist-item.compact {
-  padding: 10px 0;
-}
-
-.hist-main {
-  min-width: 0;
-}
-
-.hist-text {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.hist-result {
-  margin-top: 4px;
-  font-size: 13px;
-  color: #46506a;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.hist-meta {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.hist-meta .mono {
-  font-size: 12px;
-}
-
-.sep {
-  color: #c3c9d4;
-}
-
-.clamp-1,
-.clamp-2 {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  white-space: normal;
-}
-
-.clamp-1 {
-  -webkit-line-clamp: 1;
-}
-
-.clamp-2 {
-  -webkit-line-clamp: 2;
-}
-
-.expand-btn {
-  margin-left: auto;
+.dir-tag {
   flex: none;
-  padding-left: 8px;
-  font-size: 12px;
+  min-width: 52px;
+  justify-content: center;
+}
+
+.hist-texts {
+  flex: 1 1 160px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.src,
+.dst {
+  font-size: var(--fs-13);
+  line-height: 1.6;
+}
+
+.src {
+  color: var(--text);
+}
+
+.dst {
+  color: var(--muted);
+}
+
+.dst.empty {
+  color: var(--faint);
+}
+
+.time {
+  flex: none;
 }
 
 .hist-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.hist-actions :deep(.n-button) {
-  min-height: 28px;
-}
-
-.action-sep {
-  width: 1px;
-  height: 16px;
-  margin: 0 4px;
-  background: var(--border);
+  gap: 2px;
+  flex: none;
+  margin-left: auto;
 }
 
 .star-btn {
-  margin-right: 2px;
-  min-width: 28px;
+  color: var(--faint);
 }
 
-.star {
-  font-size: 15px;
-  line-height: 1;
-  color: #b3bac7;
+.star-btn.faved {
+  color: var(--warning);
 }
 
-.star.on {
-  color: #e0a13c;
+.star-btn.faved :deep(.ic use) {
+  fill: currentColor;
 }
 </style>

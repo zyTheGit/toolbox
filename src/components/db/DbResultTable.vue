@@ -1,43 +1,78 @@
 <template>
-  <div class="result-card">
-    <div class="result-head">
-      <span class="title">结果</span>
-      <span v-if="result" class="meta">
-        {{ rangeText }} · {{ result.elapsedMs }} ms
-      </span>
+  <div class="card result-card">
+    <div class="card-head">
+      <h3 class="card-title">
+        <AppIcon name="list" :size="16" />
+        查询结果
+      </h3>
+      <span v-if="result" class="hint">{{ metaText }}</span>
     </div>
     <n-spin :show="loading">
-      <div v-if="!result" class="placeholder">执行查询后在这里查看结果</div>
-      <n-empty v-else-if="!result.rows.length" size="small" description="没有数据" />
+      <div v-if="!result" class="result-placeholder">
+        <EmptyState
+          icon="play"
+          title="暂无查询结果"
+          description="在左侧点选表，或输入 SQL 后执行查询。"
+        />
+      </div>
+      <div v-else-if="!result.rows.length" class="result-placeholder">
+        <EmptyState title="没有数据" description="查询成功，但没有返回任何行。" />
+      </div>
       <template v-else>
         <div class="table-wrap">
-          <div class="row head">
-            <div
-              v-for="(col, index) in displayColumns"
-              :key="`${col.name}-${index}`"
-              class="cell"
-              :style="{ width: widthOf(col.name) + 'px' }"
-            >
-              <span class="col-label">{{ col.name }}</span>
-              <span class="resize" @pointerdown="startResize($event, col.name)"></span>
-            </div>
-          </div>
-          <div v-for="(row, rowIndex) in result.rows" :key="rowIndex" class="row">
-            <div
-              v-for="(cell, cellIndex) in row"
-              :key="cellIndex"
-              class="cell"
-              :style="{ width: widthOf(displayColumns[cellIndex]?.name ?? String(cellIndex)) + 'px' }"
-            >
-              <span v-if="cell === null" class="null">NULL</span>
-              <span v-else class="value" :title="String(cell)">{{ cell }}</span>
-            </div>
-          </div>
+          <table class="tbl" :style="{ width: `${tableWidth}px` }">
+            <colgroup>
+              <col
+                v-for="(col, index) in displayColumns"
+                :key="`${col.name}-${index}`"
+                :style="{ width: `${widthOf(col.name)}px` }"
+              />
+            </colgroup>
+            <thead>
+              <tr>
+                <th v-for="(col, index) in displayColumns" :key="`${col.name}-${index}`">
+                  <span class="th-label" :title="col.name">{{ col.name }}</span>
+                  <span class="resize" @pointerdown="startResize($event, col.name)"></span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, rowIndex) in result.rows" :key="rowIndex">
+                <td
+                  v-for="(cell, cellIndex) in row"
+                  :key="cellIndex"
+                  :class="{ num: typeof cell === 'number' }"
+                >
+                  <span v-if="cell === null" class="null">NULL</span>
+                  <span v-else class="value" :title="String(cell)">{{ cell }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div class="pager">
-          <n-button size="tiny" :disabled="result.offset === 0" @click="page(-1)">上一页</n-button>
-          <n-button size="tiny" :disabled="!result.hasMore" @click="page(1)">下一页</n-button>
-          <span class="pager-hint">每页 {{ result.limit }} 行</span>
+        <div class="result-foot">
+          <span>NULL 以灰色斜体显示 · 数字列等宽字体</span>
+          <div class="pager">
+            <n-button
+              size="small"
+              class="pager-btn"
+              title="上一页"
+              :disabled="loading || result.offset === 0"
+              @click="page(-1)"
+            >
+              <AppIcon name="chevron-left" :size="16" />
+            </n-button>
+            <span class="page-label">第 {{ pageNo }} 页</span>
+            <n-button
+              size="small"
+              class="pager-btn"
+              title="下一页"
+              :disabled="loading || !result.hasMore"
+              @click="page(1)"
+            >
+              <AppIcon name="chevron-right" :size="16" />
+            </n-button>
+          </div>
         </div>
       </template>
     </n-spin>
@@ -46,7 +81,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { NButton, NEmpty, NSpin } from "naive-ui";
+import { NButton, NSpin } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
+import EmptyState from "../EmptyState.vue";
 import type { DbKind, DbQueryResult } from "../../types";
 
 const props = defineProps<{
@@ -72,11 +109,21 @@ const displayColumns = computed(() => {
   return Array.from({ length: width }, (_, index) => ({ name: `列 ${index + 1}` }));
 });
 
-const rangeText = computed(() => {
+const pageNo = computed(() =>
+  props.result ? Math.floor(props.result.offset / props.result.limit) + 1 : 1,
+);
+
+const metaText = computed(() => {
   const result = props.result;
-  if (!result || !result.rows.length) return "0 行";
-  return `第 ${result.offset + 1}–${result.offset + result.rows.length} 行`;
+  if (!result) return "";
+  if (!result.rows.length) return `0 行 · ${result.elapsedMs} ms`;
+  const more = result.hasMore ? "（还有更多）" : "";
+  return `第 ${result.offset + 1}–${result.offset + result.rows.length} 行${more} · ${result.elapsedMs} ms`;
 });
+
+const tableWidth = computed(() =>
+  displayColumns.value.reduce((total, col) => total + widthOf(col.name), 0),
+);
 
 watch(
   widths,
@@ -127,67 +174,35 @@ onBeforeUnmount(stopResize);
 
 <style scoped>
 .result-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px;
   min-width: 0;
 }
-.result-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #333b4d;
-}
-.meta {
-  font-size: 12px;
-  color: var(--muted);
-}
-.placeholder {
-  padding: 24px 8px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
-}
 .table-wrap {
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
   max-height: calc(100vh - 430px);
   min-height: 120px;
+  overflow: auto;
 }
-.row {
-  display: flex;
-  min-width: max-content;
+.tbl {
+  table-layout: fixed;
+  min-width: 100%;
 }
-.row + .row {
-  border-top: 1px solid var(--border);
-}
-.row.head {
+.tbl th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--panel-soft);
-  border-bottom: 1px solid var(--border);
+  padding: 0;
+  background: var(--surface-soft);
 }
-.cell {
-  position: relative;
-  flex: none;
-  padding: 6px 10px;
-  font-size: 12px;
+.th-label {
+  display: block;
+  padding: 8px 12px;
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.row.head .cell {
-  font-weight: 600;
-  color: #333b4d;
-  user-select: none;
+.tbl td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .resize {
   position: absolute;
@@ -200,18 +215,28 @@ onBeforeUnmount(stopResize);
 .resize:hover {
   background: var(--primary-soft);
 }
-.null {
-  color: #a6adbd;
-  font-style: italic;
+.result-placeholder {
+  padding: 12px 0;
+}
+.result-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: var(--fs-12);
+  color: var(--muted);
 }
 .pager {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
 }
-.pager-hint {
-  font-size: 12px;
-  color: var(--muted);
+.pager-btn {
+  width: 28px;
+  padding: 0;
+}
+.page-label {
+  color: var(--text-2);
 }
 </style>

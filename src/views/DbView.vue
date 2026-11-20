@@ -1,59 +1,53 @@
 <template>
   <div class="page">
     <PageHead
-      title="数据库浏览器（实验）"
-      subtitle="只读浏览 SQLite 文件、PostgreSQL 与 MySQL 库；写语句会被连接本身拒绝。PostgreSQL / MySQL 尚未在真实实例上验证。"
+      title="数据库浏览器"
+      icon="database"
+      tag="实验"
+      subtitle="只读浏览 SQLite / PostgreSQL / MySQL；MySQL 连接后可切换数据库。尚未在真实实例上验证。"
+    >
+      <DbConnectionHistory ref="historyRef" @fill="fillFromHistory" @error="error = $event" />
+    </PageHead>
+
+    <DbConnectionCard
+      v-model:kind="kind"
+      :dsn="dsn"
+      :session="session"
+      :selected-database="selectedDatabase"
+      :connecting="connecting"
+      :picking="picking"
+      :disconnecting="disconnecting"
+      :switching="switching"
+      :refreshing="refreshing"
+      @update:dsn="dsn = $event"
+      @pick="pickSqlite"
+      @connect="connect"
+      @disconnect="disconnect"
+      @refresh="refreshDatabases"
+      @select-database="switchDatabase"
     />
 
-    <div class="card conn-card">
-      <div class="conn-row">
-        <n-radio-group v-model:value="kind" size="small">
-          <n-radio-button value="sqlite">SQLite</n-radio-button>
-          <n-radio-button value="postgres">PostgreSQL</n-radio-button>
-          <n-radio-button value="mysql">MySQL</n-radio-button>
-        </n-radio-group>
-        <template v-if="kind === 'sqlite'">
-          <n-input
-            v-model:value="sqlitePath"
-            size="small"
-            placeholder="选择 .db / .sqlite 文件"
-            class="grow"
-          />
-          <n-button size="small" @click="pickSqlite">选择文件</n-button>
-        </template>
-        <n-input
-          v-else-if="kind === 'postgres'"
-          v-model:value="postgresUrl"
-          size="small"
-          placeholder="postgres://user:pass@host:5432/dbname 或 host=... user=... password=..."
-          class="grow"
-        />
-        <n-input
-          v-else
-          v-model:value="mysqlUrl"
-          size="small"
-          placeholder="mysql://user:pass@host:3306（库名可省略）"
-          class="grow"
-        />
-        <n-button type="primary" size="small" :loading="connecting" @click="connect">连接</n-button>
-        <n-button v-if="session" size="small" @click="disconnect">断开</n-button>
-        <DbConnectionHistory ref="historyRef" @fill="fillFromHistory" @error="error = $event" />
-      </div>
-      <div class="conn-hint">
-        连接固定为只读，三种数据库语句超时 15 秒，请使用有查询权限的账号。MySQL
-        可省略连接串末尾的库名，连接后默认打开第一个库并可在右上角切换；需要 TLS 时在地址后加
-        ?require_ssl=true。
-      </div>
-    </div>
-
-    <n-alert v-if="error" type="error" :bordered="false" closable @close="error = ''">
+    <n-alert
+      v-if="error"
+      class="page-error"
+      type="error"
+      :bordered="false"
+      closable
+      @close="error = ''"
+    >
       {{ error }}
     </n-alert>
 
-    <div v-if="session" class="db-layout" :style="{ '--schema-width': `${schemaWidth}px` }">
+    <div
+      v-if="session"
+      class="db-layout"
+      :class="{ closing: disconnecting }"
+      :style="{ '--schema-width': `${schemaWidth}px` }"
+    >
       <DbSchemaPanel
         :tables="session.schema.tables"
         :active="activeTable"
+        :database="schemaDatabase"
         :empty-hint="schemaEmptyHint"
         @select="useTable"
       />
@@ -64,52 +58,39 @@
         @pointerdown="startResize"
       ></div>
       <div class="db-main">
-        <div class="card editor-card">
-          <div class="editor-head">
-            <span class="session-label" :title="session.label">
-              {{ session.label }}
-              <span class="badge">{{ dbKindLabel(session.kind) }}</span>
-            </span>
-            <div class="editor-actions">
-              <DbDatabaseSelect
-                v-if="session.databases.length > 1"
-                :databases="session.databases"
-                :value="selectedDatabase"
-                :loading="switching"
-                @update:value="switchDatabase"
-              />
-              <n-select v-model:value="limit" size="tiny" :options="limitOptions" class="limit-select" />
-              <n-button type="primary" size="small" :loading="running" @click="run(0)">
-                执行 Ctrl+Enter
-              </n-button>
-            </div>
-          </div>
-          <n-input
-            v-model:value="sql"
-            type="textarea"
-            class="editor"
-            :autosize="{ minRows: 4, maxRows: 12 }"
-            placeholder="SELECT * FROM ..."
-            @keydown.ctrl.enter.prevent="run(0)"
-            @keydown.meta.enter.prevent="run(0)"
-          />
-        </div>
+        <DbQueryCard
+          v-model:sql="sql"
+          v-model:limit="limit"
+          :kind="session.kind"
+          :running="running"
+          @run="run(0)"
+        />
         <DbResultTable :result="result" :kind="session.kind" :loading="running" @page="run" />
       </div>
+    </div>
+
+    <div v-else class="card db-empty">
+      <EmptyState
+        icon="database"
+        title="尚未连接数据库"
+        description="选择 SQLite 文件，或填写 PostgreSQL / MySQL 连接串后点击「连接」，即可浏览结构与执行只读查询。"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
-import { NAlert, NButton, NInput, NRadioButton, NRadioGroup, NSelect } from "naive-ui";
+import { NAlert } from "naive-ui";
 import PageHead from "../components/PageHead.vue";
+import EmptyState from "../components/EmptyState.vue";
+import DbConnectionCard from "../components/db/DbConnectionCard.vue";
 import DbConnectionHistory from "../components/db/DbConnectionHistory.vue";
-import DbDatabaseSelect from "../components/db/DbDatabaseSelect.vue";
+import DbQueryCard from "../components/db/DbQueryCard.vue";
 import DbSchemaPanel from "../components/db/DbSchemaPanel.vue";
 import DbResultTable from "../components/db/DbResultTable.vue";
 import { useSchemaWidth } from "../composables/useSchemaWidth";
-import { dbKindLabel, selectSql } from "../components/db/sqlText";
+import { baseName, selectSql } from "../components/db/sqlText";
 import { createDbSeq } from "../utils/dbSeq";
 import { api } from "../api";
 import type { DbKind, DbQueryResult, DbSessionInfo, DbTable } from "../types";
@@ -119,7 +100,12 @@ const sqlitePath = ref("");
 const postgresUrl = ref("postgres://postgres@localhost:5432/postgres");
 const mysqlUrl = ref("mysql://root@localhost:3306/mysql");
 const connecting = ref(false);
+const picking = ref(false);
+const disconnecting = ref(false);
+const refreshing = ref(false);
+const switching = ref(false);
 const session = ref<DbSessionInfo | null>(null);
+const selectedDatabase = ref("");
 const activeTable = ref("");
 const sql = ref("");
 const limit = ref(100);
@@ -128,16 +114,28 @@ const result = ref<DbQueryResult | null>(null);
 const error = ref("");
 
 const { schemaWidth, dragging, startResize } = useSchemaWidth();
-const historyRef = ref<{ refresh: () => Promise<void> } | null>(null);
-const selectedDatabase = ref("");
-const switching = ref(false);
+const historyRef = ref<InstanceType<typeof DbConnectionHistory> | null>(null);
 // 请求序号：open / selectDatabase / query / close 各自递增，过期响应直接丢弃
 const seq = createDbSeq();
 
-const limitOptions = [50, 100, 200, 500].map((value) => ({
-  label: `${value} 行`,
-  value,
-}));
+// 三种引擎各保留自己的输入内容，切换分段时不用重新填写
+const dsn = computed({
+  get: () => {
+    if (kind.value === "sqlite") return sqlitePath.value;
+    return kind.value === "postgres" ? postgresUrl.value : mysqlUrl.value;
+  },
+  set: (value: string) => {
+    if (kind.value === "sqlite") sqlitePath.value = value;
+    else if (kind.value === "postgres") postgresUrl.value = value;
+    else mysqlUrl.value = value;
+  },
+});
+
+const schemaDatabase = computed(() => {
+  const current = session.value;
+  if (!current) return "";
+  return current.kind === "sqlite" ? baseName(current.label) : current.label;
+});
 
 const schemaEmptyHint = computed(() => {
   const current = session.value;
@@ -145,19 +143,39 @@ const schemaEmptyHint = computed(() => {
   return current.kind === "mysql" && current.databases.length > 1 ? "请先在上方选择数据库" : "";
 });
 
+/** 连接 / 切库成功后统一更新会话与当前库选中项。 */
+function applySession(info: DbSessionInfo): void {
+  session.value = info;
+  if (info.kind === "postgres") {
+    selectedDatabase.value = info.label;
+    return;
+  }
+  selectedDatabase.value = info.databases.some((db) => db.name === info.label) ? info.label : "";
+}
+
 async function pickSqlite(): Promise<void> {
+  if (picking.value) return;
+  picking.value = true;
   try {
     const path = await api.dbPickSqlite();
     if (path) sqlitePath.value = path;
   } catch (e) {
     error.value = String(e);
+  } finally {
+    picking.value = false;
   }
 }
 
 async function connect(): Promise<void> {
-  if (connecting.value) return;
+  if (connecting.value || disconnecting.value) return;
   const token = seq.begin("open");
   const previousId = session.value?.id ?? "";
+  // 重连 / 换引擎时作废旧会话未返回的查询与切库请求
+  seq.invalidate("query");
+  seq.invalidate("selectDatabase");
+  running.value = false;
+  switching.value = false;
+  refreshing.value = false;
   connecting.value = true;
   error.value = "";
   try {
@@ -174,8 +192,7 @@ async function connect(): Promise<void> {
     });
     // 期间已断连或再次连接，本次结果作废
     if (!seq.isLatest("open", token)) return;
-    session.value = info;
-    selectedDatabase.value = info.databases.some((db) => db.name === info.label) ? info.label : "";
+    applySession(info);
     result.value = null;
     activeTable.value = "";
     if (previousId && previousId !== info.id) {
@@ -194,25 +211,58 @@ async function connect(): Promise<void> {
 
 async function switchDatabase(database: string): Promise<void> {
   const current = session.value;
-  if (!current || !database) return;
+  if (!current || !database || switching.value) return;
   const token = seq.begin("selectDatabase");
+  // 切库后旧结果立即作废，避免旧查询迟到覆盖
+  seq.invalidate("query");
+  running.value = false;
+  refreshing.value = false;
   switching.value = true;
   error.value = "";
   try {
     const info = await api.dbSelectDatabase(current.id, database);
     if (!seq.isLatest("selectDatabase", token) || session.value?.id !== current.id) return;
-    session.value = info;
-    selectedDatabase.value = database;
+    applySession(info);
     result.value = null;
     activeTable.value = "";
     const first = info.schema.tables[0];
     if (first) useTable(first);
   } catch (e) {
     if (!seq.isLatest("selectDatabase", token)) return;
-    selectedDatabase.value = current.databases.some((db) => db.name === current.label) ? current.label : "";
+    const stillListed = current.databases.some((db) => db.name === current.label);
+    selectedDatabase.value = stillListed || current.kind === "postgres" ? current.label : "";
     error.value = String(e);
   } finally {
     if (seq.isLatest("selectDatabase", token)) switching.value = false;
+  }
+}
+
+/** 重新读取库列表与结构；MySQL 通过重新选择当前库触发后端刷新。 */
+async function refreshDatabases(): Promise<void> {
+  const current = session.value;
+  if (!current || current.kind === "sqlite" || refreshing.value) return;
+  const token = seq.begin("selectDatabase");
+  refreshing.value = true;
+  error.value = "";
+  try {
+    if (current.kind === "mysql") {
+      const target = selectedDatabase.value || current.label;
+      const info = await api.dbSelectDatabase(current.id, target);
+      if (!seq.isLatest("selectDatabase", token) || session.value?.id !== current.id) return;
+      applySession(info);
+      if (activeTable.value && !info.schema.tables.some((t) => t.name === activeTable.value)) {
+        activeTable.value = "";
+        result.value = null;
+      }
+    } else {
+      const schema = await api.dbSchema(current.id);
+      if (!seq.isLatest("selectDatabase", token) || session.value?.id !== current.id) return;
+      session.value = { ...current, schema };
+    }
+  } catch (e) {
+    if (seq.isLatest("selectDatabase", token)) error.value = String(e);
+  } finally {
+    if (seq.isLatest("selectDatabase", token)) refreshing.value = false;
   }
 }
 
@@ -225,24 +275,25 @@ function fillFromHistory(nextKind: DbKind, connection: string): void {
 
 async function disconnect(): Promise<void> {
   const current = session.value;
-  if (!current) return;
+  if (!current || disconnecting.value) return;
   // 先作废未返回的开 / 切库 / 查询，避免迟到的响应把会话“复活”
-  seq.begin("close");
-  seq.invalidate("open");
-  seq.invalidate("selectDatabase");
-  seq.invalidate("query");
-  session.value = null;
-  selectedDatabase.value = "";
-  result.value = null;
-  activeTable.value = "";
-  connecting.value = false;
-  switching.value = false;
+  seq.invalidateAll();
   running.value = false;
+  switching.value = false;
+  refreshing.value = false;
+  disconnecting.value = true;
   try {
     // 页面只维护一个会话，断开时顺手清掉可能残留的旧会话
     await api.dbCloseAll();
   } catch {
     // 关闭失败不影响界面，进程退出时会回收连接
+  } finally {
+    session.value = null;
+    selectedDatabase.value = "";
+    result.value = null;
+    activeTable.value = "";
+    connecting.value = false;
+    disconnecting.value = false;
   }
 }
 
@@ -254,7 +305,7 @@ function useTable(table: DbTable): void {
 
 async function run(offset = 0): Promise<void> {
   const current = session.value;
-  if (!current) return;
+  if (!current || running.value) return;
   const text = sql.value.trim();
   if (!text) {
     error.value = "请输入 SQL";
@@ -284,28 +335,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.conn-card {
-  padding: 16px 20px;
-}
-.conn-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.grow {
-  flex: 1;
-  min-width: 260px;
-}
-.conn-hint {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--muted);
+.page-error {
+  margin-top: 16px;
 }
 .db-layout {
   display: grid;
-  grid-template-columns: var(--schema-width, 268px) 16px minmax(0, 1fr);
-  row-gap: 16px;
+  grid-template-columns: var(--schema-width, 264px) 16px minmax(0, 1fr);
+  gap: 0 8px;
+  margin-top: 16px;
   align-items: start;
 }
 .db-resizer {
@@ -322,16 +359,12 @@ onBeforeUnmount(() => {
   left: 50%;
   width: 3px;
   transform: translateX(-50%);
-  border-radius: 999px;
-  background: #e3e7ef;
-  transition: background 0.15s ease;
+  border-radius: var(--r-pill);
+  background: var(--border);
 }
 .db-resizer:hover::before,
 .db-resizer.dragging::before {
-  background: #b9c4da;
-}
-.db-layout .card {
-  margin-top: 0;
+  background: var(--border-strong);
 }
 .db-main {
   display: flex;
@@ -339,49 +372,13 @@ onBeforeUnmount(() => {
   gap: 16px;
   min-width: 0;
 }
-.editor-card {
-  padding: 14px;
+/* 断开时后端仍在关闭会话，先锁住编辑区避免并发查询 */
+.db-layout.closing {
+  pointer-events: none;
+  opacity: 0.6;
 }
-.editor-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.session-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #333b4d;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.badge {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--primary);
-  background: var(--primary-soft);
-  border-radius: 4px;
-  padding: 1px 6px;
-  flex: none;
-}
-.editor-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-.limit-select {
-  width: 96px;
-}
-.editor :deep(textarea) {
-  font-family: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
-  font-size: 12px;
+.db-empty {
+  margin-top: 16px;
 }
 @media (max-width: 1000px) {
   .db-layout {

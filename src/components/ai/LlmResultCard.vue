@@ -1,38 +1,48 @@
 <template>
-  <div class="result" :class="{ failed: Boolean(response.error) }">
-    <div class="result-head">
-      <div class="title">
-        <span class="provider">{{ response.providerName }}</span>
-        <n-tag size="tiny" :bordered="false">{{ response.model }}</n-tag>
-      </div>
-      <div class="meta">
-        <span class="mono">{{ response.latencyMs }} ms</span>
-        <span v-if="response.totalTokens" class="mono">
-          {{ response.promptTokens }} + {{ response.completionTokens }} = {{ response.totalTokens }} tok
-        </span>
-        <n-button
-          v-if="response.content"
-          size="tiny"
-          quaternary
-          @click="copy"
-        >
-          复制
-        </n-button>
-      </div>
+  <div class="llm-card" :class="{ failed: Boolean(response.error) }">
+    <div class="llm-head">
+      <span class="tag tag-primary">{{ response.providerName }}</span>
+      <span class="tag">{{ response.model }}</span>
+      <span v-if="response.error" class="pill pill-err">失败</span>
+      <span v-else class="hint meta">{{ meta }}</span>
+      <span class="grow"></span>
+      <n-button
+        v-if="response.content"
+        quaternary
+        circle
+        size="tiny"
+        title="复制回答"
+        @click="copy"
+      >
+        <template #icon><AppIcon name="copy" :size="16" /></template>
+      </n-button>
     </div>
-    <n-alert v-if="response.error" type="error" :bordered="false">{{ response.error }}</n-alert>
-    <pre v-else class="content">{{ response.content }}</pre>
+
+    <div v-if="response.error" class="alert alert-err">
+      <AppIcon name="alert" :size="16" />
+      <span>{{ response.error }}</span>
+    </div>
+    <div v-else class="llm-body">{{ response.content }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { NAlert, NButton, NTag, useMessage } from "naive-ui";
+import { computed } from "vue";
+import { NButton, useMessage } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
 import { copyText } from "../../utils/clipboard";
 import { describeError } from "../../utils/errors";
 import type { LlmResponse } from "../../types";
 
 const props = defineProps<{ response: LlmResponse }>();
 const message = useMessage();
+
+const meta = computed(() => {
+  const value = props.response;
+  const latency = `${value.latencyMs} ms`;
+  if (!value.totalTokens) return latency;
+  return `${latency} · ${value.promptTokens}+${value.completionTokens}=${value.totalTokens} tok`;
+});
 
 async function copy(): Promise<void> {
   try {
@@ -45,51 +55,30 @@ async function copy(): Promise<void> {
 </script>
 
 <style scoped>
-.result {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
+.llm-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
 }
-.result.failed {
-  border-color: #f0c8c8;
-  background: #fffafa;
+.llm-card.failed {
+  border-color: var(--danger);
 }
-.result-head {
+.llm-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
 }
-.title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.provider {
-  font-size: 13px;
-  font-weight: 600;
-}
-.meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.content {
-  margin: 0;
-  max-height: 360px;
-  overflow: auto;
+.llm-body {
+  font-size: var(--fs-13);
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 13px;
-  line-height: 1.6;
-  font-family: inherit;
+  max-height: 320px;
+  overflow: auto;
 }
 </style>

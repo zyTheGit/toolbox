@@ -1,25 +1,61 @@
 <template>
   <div class="provider">
     <div class="provider-head">
-      <n-input :value="provider.name" size="small" placeholder="显示名称" class="name-input" @update:value="emitValue('name', $event)" />
-      <n-button size="tiny" quaternary type="error" @click="emit('remove')">移除</n-button>
+      <n-input
+        :value="provider.name"
+        size="small"
+        placeholder="显示名称"
+        class="name-input"
+        @update:value="emitValue('name', $event)"
+      />
+      <span class="tag" :class="ready ? 'tag-primary' : 'tag-warn'">
+        {{ ready ? "凭据就绪" : "缺少凭据" }}
+      </span>
+      <span class="grow" />
+      <n-button quaternary circle size="small" title="移除模型" @click="emit('remove')">
+        <template #icon><AppIcon name="trash" :size="16" /></template>
+      </n-button>
     </div>
-    <div class="provider-grid">
+    <div class="form-grid">
       <div class="field">
-        <span class="field-label">接口地址</span>
-        <n-input :value="provider.baseUrl" size="small" placeholder="https://api.example.com/v1" @update:value="emitValue('baseUrl', $event)" />
+        <label>接口地址</label>
+        <n-input
+          :value="provider.baseUrl"
+          size="small"
+          placeholder="https://api.example.com/v1"
+          @update:value="emitValue('baseUrl', $event)"
+        />
       </div>
       <div class="field">
-        <span class="field-label">模型名</span>
-        <n-input :value="provider.model" size="small" placeholder="gpt-4o-mini / glm-4-flash" @update:value="emitValue('model', $event)" />
+        <label>模型名</label>
+        <n-input
+          :value="provider.model"
+          size="small"
+          placeholder="gpt-4o-mini / glm-4-flash"
+          @update:value="emitValue('model', $event)"
+        />
       </div>
       <div class="field">
-        <span class="field-label">凭据</span>
-        <n-select :value="provider.keyEntryId" size="small" :options="keyOptions" clearable placeholder="选择 API Key 条目" @update:value="emitValue('keyEntryId', $event ?? '')" />
+        <label>凭据</label>
+        <n-select
+          :value="provider.keyEntryId"
+          size="small"
+          :options="keyOptions"
+          clearable
+          placeholder="选择 API Key 条目"
+          @update:value="emitValue('keyEntryId', $event ?? '')"
+        />
       </div>
       <div class="field">
-        <span class="field-label">默认温度</span>
-        <n-input-number :value="provider.temperature" size="small" :min="0" :max="2" :step="0.1" @update:value="emitValue('temperature', $event ?? 0.7)" />
+        <label>默认温度</label>
+        <n-input-number
+          :value="provider.temperature"
+          size="small"
+          :min="0"
+          :max="2"
+          :step="0.1"
+          @update:value="emitValue('temperature', $event ?? 0.7)"
+        />
       </div>
     </div>
   </div>
@@ -28,6 +64,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { NButton, NInput, NInputNumber, NSelect } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
 import type { LlmProviderConfig, SecretEntryView } from "../../types";
 
 const props = defineProps<{
@@ -47,6 +84,12 @@ const keyOptions = computed(() =>
   })),
 );
 
+const ready = computed(
+  () =>
+    Boolean(props.provider.keyEntryId) &&
+    props.entries.some((entry) => entry.id === props.provider.keyEntryId),
+);
+
 function emitValue(key: keyof LlmProviderConfig, value: string | number): void {
   emit("update", { ...props.provider, [key]: value });
 }
@@ -55,7 +98,8 @@ function emitValue(key: keyof LlmProviderConfig, value: string | number): void {
 <style scoped>
 .provider {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
   padding: 12px;
 }
 .provider-head {
@@ -66,26 +110,5 @@ function emitValue(key: keyof LlmProviderConfig, value: string | number): void {
 }
 .name-input {
   max-width: 260px;
-}
-.provider-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.field-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #4b5468;
-}
-@media (max-width: 900px) {
-  .provider-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 </style>

@@ -9,7 +9,10 @@
       @remove="remove(i)"
     />
     <div class="provider-foot">
-      <n-button size="small" dashed @click="add">添加模型</n-button>
+      <n-button size="small" dashed @click="add">
+        <template #icon><AppIcon name="plus" :size="16" /></template>
+        添加模型
+      </n-button>
       <span class="hint">接口需兼容 OpenAI Chat Completions；凭据在「API Key 管理器」中维护。</span>
     </div>
   </div>
@@ -17,6 +20,7 @@
 
 <script setup lang="ts">
 import { NButton } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
 import LlmProviderRow from "./LlmProviderRow.vue";
 import { newId } from "../../utils/llm";
 import type { LlmProviderConfig, SecretEntryView } from "../../types";

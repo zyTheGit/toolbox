@@ -1,57 +1,70 @@
 <template>
-  <n-drawer
-    :show="show"
-    :width="560"
-    placement="right"
-    @update:show="onShowChange"
-  >
+  <n-drawer :show="show" :width="640" placement="right" @update:show="onShowChange">
     <n-drawer-content :title="`运行记录 · ${displayName}`" closable>
       <div v-if="loading" class="drawer-state">
         <n-spin size="medium" />
       </div>
+
       <n-alert v-else-if="loadError" type="error" :bordered="false" class="drawer-alert">
         {{ loadError }}
       </n-alert>
+
       <EmptyState
         v-else-if="!runs.length"
+        icon="history"
         title="暂无运行记录"
         description="任务触发后会在这里显示执行详情。"
       />
-      <div v-else class="run-list">
-        <div v-for="run in runs" :key="run.id" class="run-card">
-          <div class="run-head">
-            <div class="run-head-main">
-              <n-tag size="small" :type="run.trigger === 'manual' ? 'info' : 'default'" :bordered="false">
-                {{ triggerLabel(run.trigger) }}
-              </n-tag>
-              <StatusPill :status="run.status" />
-              <span class="run-time">{{ formatDateTime(run.startedAt, true) }}</span>
-              <span class="run-time">· {{ durationText(run) }}</span>
-            </div>
-            <n-button text size="tiny" @click="toggle(run.id)">
-              {{ expanded.has(run.id) ? "收起" : "展开" }}
-            </n-button>
-          </div>
 
-          <div v-if="hasMeta(run)" class="run-meta">
-            <span v-if="run.exitCode !== null && run.exitCode !== undefined">exitCode {{ run.exitCode }}</span>
-            <span v-if="run.jobId" class="mono">jobId {{ run.jobId }}</span>
-          </div>
-
-          <div v-if="run.command" class="run-command mono">{{ run.command }}</div>
-
-          <div v-if="expanded.has(run.id)" class="run-detail">
-            <div v-if="run.output" class="run-block">
-              <div class="run-block-title">输出</div>
-              <pre class="run-pre mono">{{ run.output }}</pre>
-            </div>
-            <div v-if="run.error" class="run-block">
-              <div class="run-block-title run-block-error">错误</div>
-              <pre class="run-pre mono run-pre-error">{{ run.error }}</pre>
-            </div>
-            <div v-if="!run.output && !run.error" class="hint">本次运行没有输出。</div>
-          </div>
-        </div>
+      <div v-else class="table-wrap">
+        <table class="tbl runs-table">
+          <thead>
+            <tr>
+              <th>触发</th>
+              <th>状态</th>
+              <th>开始时间</th>
+              <th>耗时</th>
+              <th>退出码</th>
+              <th class="detail-col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="run in runs" :key="run.id">
+              <tr class="run-row" @click="toggle(run.id)">
+                <td>
+                  <span class="tag" :class="{ 'tag-primary': run.trigger === 'manual' }">
+                    {{ triggerLabel(run.trigger) }}
+                  </span>
+                </td>
+                <td><StatusPill :status="run.status" /></td>
+                <td class="num">{{ formatDateTime(run.startedAt, true) }}</td>
+                <td class="num">{{ durationText(run) }}</td>
+                <td class="num">{{ exitText(run) }}</td>
+                <td class="detail-col">
+                  <AppIcon
+                    :name="expanded.has(run.id) ? 'chevron-down' : 'chevron-right'"
+                    :size="16"
+                  />
+                </td>
+              </tr>
+              <tr v-if="expanded.has(run.id)" class="detail-row">
+                <td colspan="6">
+                  <div v-if="run.command" class="run-command mono">{{ run.command }}</div>
+                  <div v-if="run.jobId" class="hint run-job mono">jobId {{ run.jobId }}</div>
+                  <div v-if="run.output" class="run-block">
+                    <div class="run-block-title">输出</div>
+                    <pre class="run-pre mono">{{ run.output }}</pre>
+                  </div>
+                  <div v-if="run.error" class="run-block">
+                    <div class="run-block-title run-block-error">错误</div>
+                    <pre class="run-pre run-pre-error mono">{{ run.error }}</pre>
+                  </div>
+                  <div v-if="!run.output && !run.error" class="hint">本次运行没有输出。</div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
       </div>
     </n-drawer-content>
   </n-drawer>
@@ -59,16 +72,10 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import {
-  NAlert,
-  NButton,
-  NDrawer,
-  NDrawerContent,
-  NSpin,
-  NTag,
-} from "naive-ui";
+import { NAlert, NDrawer, NDrawerContent, NSpin } from "naive-ui";
 import { api } from "../../api";
 import type { Task, TaskRun } from "../../types";
+import AppIcon from "../AppIcon.vue";
 import EmptyState from "../EmptyState.vue";
 import StatusPill from "../StatusPill.vue";
 import { errorText, formatDateTime } from "./task-utils";
@@ -117,18 +124,14 @@ async function refresh(): Promise<void> {
   }
 }
 
-function hasMeta(run: TaskRun): boolean {
-  return (run.exitCode !== null && run.exitCode !== undefined) || Boolean(run.jobId);
-}
-
 function triggerLabel(trigger: string): string {
   if (trigger === "schedule") return "定时";
   if (trigger === "manual") return "手动";
   return trigger || "未知";
 }
 
-function onShowChange(value: boolean): void {
-  emit("update:show", value);
+function exitText(run: TaskRun): string {
+  return run.exitCode === null || run.exitCode === undefined ? "—" : String(run.exitCode);
 }
 
 function durationText(run: TaskRun): string {
@@ -150,6 +153,10 @@ function toggle(id: string): void {
   expanded.value = next;
 }
 
+function onShowChange(value: boolean): void {
+  emit("update:show", value);
+}
+
 defineExpose({ refresh });
 </script>
 
@@ -165,71 +172,53 @@ defineExpose({ refresh });
   margin-bottom: 12px;
 }
 
-.run-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.runs-table {
+  white-space: nowrap;
 }
 
-.run-card {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  background: var(--panel);
+.runs-table .run-row {
+  cursor: pointer;
 }
 
-.run-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.runs-table .detail-col {
+  width: 32px;
+  text-align: right;
+  color: var(--faint);
 }
 
-.run-head-main {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
+.runs-table .detail-row td {
+  background: var(--surface-soft);
+  white-space: normal;
 }
 
-.run-time {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.run-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--muted);
+.runs-table .detail-row:hover td {
+  background: var(--surface-soft);
 }
 
 .run-command {
-  margin-top: 8px;
+  margin-bottom: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
-  background: var(--panel-soft);
   border: 1px solid var(--border);
-  color: #394152;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-2);
   word-break: break-all;
   white-space: pre-wrap;
 }
 
-.run-detail {
+.run-job {
+  margin-bottom: 8px;
+}
+
+.run-block + .run-block {
   margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 .run-block-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #4a5468;
   margin-bottom: 4px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--text-2);
 }
 
 .run-block-error {
@@ -243,16 +232,16 @@ defineExpose({ refresh });
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--panel-soft);
-  color: #2c3344;
+  background: var(--surface-soft);
+  color: var(--text-2);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.6;
 }
 
 .run-pre-error {
-  color: #b03030;
-  background: #fdf5f5;
-  border-color: #f0d4d4;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--border);
 }
 </style>

@@ -8,6 +8,12 @@ export function dbKindLabel(value: DbKind | ""): string {
   return value === "postgres" ? "PostgreSQL" : "MySQL";
 }
 
+/** 取路径最后一段，用于展示已连接的 SQLite 文件名。 */
+export function baseName(path: string): string {
+  const parts = path.trim().split(/[\\/]/);
+  return parts[parts.length - 1] || path.trim();
+}
+
 /** 按方言引用标识符：MySQL 用反引号，其余用双引号。 */
 export function quoteIdentifier(name: string, kind: DbKind | ""): string {
   if (kind === "mysql") {

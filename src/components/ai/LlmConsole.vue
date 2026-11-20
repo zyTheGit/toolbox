@@ -1,192 +1,84 @@
 <template>
-  <div class="card">
-    <div class="spread head">
-      <div>
-        <h2 class="section-title">LLM 调试台</h2>
-        <p class="hint">同一 Prompt 并行请求多个模型，并排对比回复、耗时与 Token 用量。</p>
-      </div>
-      <div class="head-actions">
-        <n-tag v-if="dirty" size="small" type="warning" :bordered="false">AI 配置未保存</n-tag>
-        <n-button size="small" :disabled="!dirty || saving" :loading="saving" @click="saveConfig">
-          保存 AI 配置
-        </n-button>
-      </div>
-    </div>
+  <div class="bench">
+    <LlmRequestCard
+      :providers="draft.providers"
+      :selected-ids="selectedIds"
+      :ready-ids="readyIds"
+      :system-prompt="systemPrompt"
+      :prompt-text="promptText"
+      :template-id="templateId"
+      :template-options="templateOptions"
+      :variables="variables"
+      :var-values="varValues"
+      :temperature="temperature"
+      :max-tokens="maxTokens"
+      :running="running"
+      :has-results="results.length > 0"
+      @update:selected-ids="selectedIds = $event"
+      @update:system-prompt="systemPrompt = $event"
+      @update:prompt-text="promptText = $event"
+      @update:template-id="applyTemplate"
+      @update:variable="(name, value) => (varValues[name] = value)"
+      @update:temperature="temperature = $event"
+      @update:max-tokens="maxTokens = $event"
+      @run="run"
+      @clear="clearResults"
+    />
 
-    <div class="form">
-      <div class="field">
-        <span class="field-label">Prompt 模板</span>
-        <div class="template-row">
-          <n-select
-            v-model:value="templateId"
-            size="small"
-            clearable
-            placeholder="选择模板（可选）"
-            :options="templateOptions"
-            class="template-select"
-            @update:value="applyTemplate"
-          />
-          <span class="hint">模板支持 &#123;&#123;变量&#125;&#125; 占位符</span>
+    <div class="side">
+      <LlmResultsCard
+        :results="results"
+        :pending="pendingProviders"
+        :meta="resultsMeta"
+      />
+
+      <LlmUsagePanel
+        :usage="usage"
+        :days="usageDays"
+        :loading="usageLoading"
+        @refresh="refreshUsage"
+      />
+
+      <details class="collapse">
+        <summary><AppIcon name="chevron-right" :size="16" />模型配置与 Prompt 模板</summary>
+        <div class="collapse-body stack">
+          <p class="hint">
+            这里的改动会进入 AI 配置草稿，点击页头「保存 AI 配置」后写入本机；未保存时页头会提示。
+          </p>
+          <LlmProviderSettings v-model:providers="draft.providers" :entries="store.secretEntries" />
+          <div class="divider" />
+          <h4 class="sub-title"><AppIcon name="braces" :size="16" />Prompt 模板</h4>
+          <PromptTemplateManager v-model:templates="draft.templates" />
         </div>
-      </div>
-
-      <label class="field">
-        <span class="field-label">System Prompt（可选）</span>
-        <n-input
-          v-model:value="systemPrompt"
-          type="textarea"
-          size="small"
-          :autosize="{ minRows: 2, maxRows: 4 }"
-          placeholder="例如：你是一名严谨的技术顾问，回答尽量简洁。"
-        />
-      </label>
-
-      <label class="field">
-        <span class="field-label">Prompt</span>
-        <n-input
-          v-model:value="promptText"
-          type="textarea"
-          :autosize="{ minRows: 6, maxRows: 14 }"
-          placeholder="输入要发送的内容，可使用 {{name}} 变量"
-        />
-      </label>
-
-      <div v-if="variables.length" class="var-grid">
-        <label v-for="name in variables" :key="name" class="field">
-          <span class="field-label">变量 · {{ name }}</span>
-          <n-input
-            v-model:value="varValues[name]"
-            size="small"
-            :placeholder="`填写 ${name} 的值`"
-          />
-        </label>
-      </div>
-
-      <div class="param-row">
-        <label class="field param">
-          <span class="field-label">温度（留空跟随模型）</span>
-          <n-input-number
-            v-model:value="temperature"
-            size="small"
-            :min="0"
-            :max="2"
-            :step="0.1"
-            clearable
-            placeholder="默认"
-          />
-        </label>
-        <label class="field param">
-          <span class="field-label">最大输出 Token（可选）</span>
-          <n-input-number
-            v-model:value="maxTokens"
-            size="small"
-            :min="1"
-            :max="32768"
-            clearable
-            placeholder="默认"
-          />
-        </label>
-      </div>
-
-      <div class="field">
-        <span class="field-label">发送到</span>
-        <n-checkbox-group v-model:value="selectedIds">
-          <div class="provider-picks">
-            <n-checkbox v-for="provider in draft.providers" :key="provider.id" :value="provider.id">
-              <span class="pick-name">{{ provider.name }}</span>
-              <n-tag
-                size="tiny"
-                :bordered="false"
-                :type="keyReady(provider.keyEntryId) ? 'success' : 'default'"
-              >
-                {{ keyReady(provider.keyEntryId) ? provider.model : "未配置凭据" }}
-              </n-tag>
-            </n-checkbox>
-          </div>
-        </n-checkbox-group>
-      </div>
-
-      <div class="run-row">
-        <n-button type="primary" :loading="running" :disabled="!draft.providers.length" @click="run">
-          并行请求
-        </n-button>
-        <n-button v-if="results.length" quaternary :disabled="running" @click="results = []">
-          清空结果
-        </n-button>
-        <span class="hint">请求为非流式，超时 120 秒。</span>
-      </div>
+      </details>
     </div>
-  </div>
-
-  <div v-if="results.length" class="card">
-    <div class="spread">
-      <h2 class="section-title">对比结果（{{ results.length }}）</h2>
-    </div>
-    <div class="results">
-      <LlmResultCard v-for="item in results" :key="item.providerId" :response="item" />
-    </div>
-  </div>
-
-  <LlmUsagePanel
-    :usage="usage"
-    :days="usageDays"
-    :loading="usageLoading"
-    @refresh="refreshUsage"
-  />
-
-  <div class="card">
-    <n-collapse>
-      <n-collapse-item title="模型配置" name="providers">
-        <LlmProviderSettings
-          v-model:providers="draft.providers"
-          :entries="store.secretEntries"
-        />
-      </n-collapse-item>
-      <n-collapse-item title="Prompt 模板" name="templates">
-        <PromptTemplateManager v-model:templates="draft.templates" />
-      </n-collapse-item>
-    </n-collapse>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import {
-  NButton,
-  NCheckbox,
-  NCheckboxGroup,
-  NCollapse,
-  NCollapseItem,
-  NInput,
-  NInputNumber,
-  NSelect,
-  NTag,
-  useMessage,
-} from "naive-ui";
+import { useMessage } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
+import LlmRequestCard from "./LlmRequestCard.vue";
+import LlmResultsCard from "./LlmResultsCard.vue";
+import LlmUsagePanel from "./LlmUsagePanel.vue";
+import LlmProviderSettings from "./LlmProviderSettings.vue";
+import PromptTemplateManager from "./PromptTemplateManager.vue";
 import { api } from "../../api";
 import { loadSecretEntries, store } from "../../store";
 import { describeError } from "../../utils/errors";
-import { useLlmConfigSave } from "../../composables/useLlmConfigSave";
+import { llmDraft } from "../../composables/useLlmDraft";
 import {
   cloneLlmConfig,
   missingVariables,
   substituteVariables,
   templateVariables,
 } from "../../utils/llm";
-import type {
-  LlmConfig,
-  LlmResponse,
-  LlmUsageSummary,
-} from "../../types";
-import LlmProviderSettings from "./LlmProviderSettings.vue";
-import PromptTemplateManager from "./PromptTemplateManager.vue";
-import LlmResultCard from "./LlmResultCard.vue";
-import LlmUsagePanel from "./LlmUsagePanel.vue";
+import type { LlmResponse, LlmUsageSummary } from "../../types";
 
 const message = useMessage();
 
-const draft = ref<LlmConfig>(cloneLlmConfig(store.config?.llm));
-const { saving, save: saveConfig } = useLlmConfigSave(draft);
+const draft = llmDraft;
 const selectedIds = ref<string[]>([]);
 const systemPrompt = ref("");
 const promptText = ref("");
@@ -200,15 +92,34 @@ const usage = ref<LlmUsageSummary | null>(null);
 const usageLoading = ref(false);
 const usageDays = 7;
 
-const dirty = computed(
-  () => JSON.stringify(draft.value) !== JSON.stringify(store.config?.llm ?? null),
-);
-
 const variables = computed(() => templateVariables(promptText.value));
 
 const templateOptions = computed(() =>
   draft.value.templates.map((item) => ({ label: item.name, value: item.id })),
 );
+
+const readyIds = computed(() =>
+  draft.value.providers
+    .filter((provider) => keyReady(provider.keyEntryId))
+    .map((provider) => provider.id),
+);
+
+const pendingProviders = computed(() =>
+  running.value
+    ? draft.value.providers.filter((provider) => selectedIds.value.includes(provider.id))
+    : [],
+);
+
+const resultsMeta = computed(() => {
+  if (running.value) return `${pendingProviders.value.length} 个模型并行请求中…`;
+  if (!results.value.length) return "";
+  const totalMs = Math.max(...results.value.map((item) => item.latencyMs));
+  const tokens = results.value
+    .filter((item) => !item.error)
+    .reduce((sum, item) => sum + item.totalTokens, 0);
+  const tokenText = tokens ? ` · 合计 ${tokens} tok` : "";
+  return `${results.value.length} 个模型 · 总耗时 ${totalMs} ms${tokenText}`;
+});
 
 function keyReady(keyEntryId: string): boolean {
   if (!keyEntryId) return false;
@@ -245,6 +156,11 @@ function applyTemplate(id: string | null): void {
   syncVariables();
 }
 
+function clearResults(): void {
+  if (running.value) return;
+  results.value = [];
+}
+
 async function refreshUsage(): Promise<void> {
   if (usageLoading.value) return;
   usageLoading.value = true;
@@ -259,7 +175,10 @@ async function refreshUsage(): Promise<void> {
 
 async function run(): Promise<void> {
   if (running.value) return;
-  if (!selectedIds.value.length) {
+  const providerIds = selectedIds.value.filter((id) =>
+    draft.value.providers.some((provider) => provider.id === id),
+  );
+  if (!providerIds.length) {
     message.warning("请至少选择一个模型");
     return;
   }
@@ -273,10 +192,12 @@ async function run(): Promise<void> {
     message.warning("Prompt 不能为空");
     return;
   }
+  const previous = results.value;
+  results.value = [];
   running.value = true;
   try {
     results.value = await api.llmRun({
-      providerIds: [...selectedIds.value],
+      providerIds,
       system: systemPrompt.value,
       prompt,
       temperature: temperature.value,
@@ -284,6 +205,8 @@ async function run(): Promise<void> {
     });
     void refreshUsage();
   } catch (err) {
+    // 请求整体失败时恢复上一次结果，避免用户丢失已完成的对比
+    results.value = previous;
     message.error(`请求失败：${describeError(err)}`);
   } finally {
     running.value = false;
@@ -302,77 +225,38 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.head {
-  align-items: flex-start;
+.bench {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
-.head .hint {
-  margin: 4px 0 0;
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
-.head-actions {
+.divider {
+  height: 1px;
+  background: var(--border);
+}
+.sub-title {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 0;
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--text-2);
 }
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 14px;
+.sub-title .ic {
+  width: 16px;
+  height: 16px;
+  color: var(--primary);
 }
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.field-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #4b5468;
-}
-.template-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.template-select {
-  max-width: 240px;
-}
-.var-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
-}
-.param-row {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-.param {
-  max-width: 220px;
-}
-.provider-picks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-}
-.pick-name {
-  margin-right: 6px;
-}
-.run-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.results {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px;
-  margin-top: 4px;
-}
-@media (max-width: 900px) {
-  .var-grid {
+@media (max-width: 1100px) {
+  .bench {
     grid-template-columns: minmax(0, 1fr);
   }
 }

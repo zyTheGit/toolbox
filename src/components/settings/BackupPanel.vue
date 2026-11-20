@@ -1,38 +1,51 @@
 <template>
   <section class="card">
-    <h2 class="section-title">备份与恢复</h2>
+    <div class="card-head">
+      <h3 class="card-title"><AppIcon name="save" :size="16" />备份与恢复</h3>
+    </div>
 
-    <div class="actions">
-      <n-button size="small" :loading="exporting" :disabled="exporting" @click="exportData">
+    <div class="row backup-actions">
+      <n-button :loading="exporting" :disabled="exporting || importing" @click="exportData">
+        <template #icon><AppIcon name="download" :size="16" /></template>
         导出备份
       </n-button>
-      <n-button size="small" :loading="importing" :disabled="importing" @click="importData">
+      <n-button :loading="importing" :disabled="importing || exporting" @click="importData">
+        <template #icon><AppIcon name="upload" :size="16" /></template>
         从备份恢复
       </n-button>
+      <n-checkbox v-model:checked="includeCommands">
+        包含命令与输出（可能含敏感信息）
+      </n-checkbox>
     </div>
 
-    <div class="option">
-      <n-checkbox v-model:checked="includeCommands">包含命令与输出（可能含敏感信息）</n-checkbox>
-    </div>
-
-    <n-alert v-if="pendingRestart" type="warning" :bordered="false" class="restart-alert">
-      <div class="restart-row">
+    <div v-if="pendingRestart" class="alert alert-warn restart-alert">
+      <AppIcon name="alert" :size="16" />
+      <div class="restart-body">
         <span>备份已恢复，请重启应用使恢复结果生效，并到「定时任务」核对命令任务。</span>
-        <n-button size="small" type="warning" @click="restart">重启应用</n-button>
+        <n-button
+          size="tiny"
+          type="warning"
+          :loading="restarting"
+          :disabled="restarting"
+          @click="restart"
+        >
+          重启应用
+        </n-button>
       </div>
-    </n-alert>
+    </div>
 
-    <div class="hint">
+    <p class="hint backup-hint">
       备份包含配置、翻译历史、任务与下载记录；API 密钥、Cookie、代理与请求头会被剔除。
       默认不导出命令文本、环境变量与运行输出。恢复时外部命令执行会被强制关闭，
       命令任务将被禁用并标记“待确认”，需要你核对后手动启用。
-    </div>
+    </p>
   </section>
 </template>
 
 <script setup lang="ts">
 import { h, ref } from "vue";
-import { NAlert, NButton, NCheckbox, useDialog, useMessage } from "naive-ui";
+import { NButton, NCheckbox, useDialog, useMessage } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
 import { api } from "../../api";
 import type { ImportOutcome } from "../../types";
 import { describeError } from "../../utils/errors";
@@ -42,14 +55,12 @@ const dialog = useDialog();
 
 const exporting = ref(false);
 const importing = ref(false);
+const restarting = ref(false);
 const includeCommands = ref(false);
 const pendingRestart = ref(false);
 
-function errorText(err: unknown): string {
-  return describeError(err);
-}
-
 async function exportData(): Promise<void> {
+  if (exporting.value) return;
   if (includeCommands.value) {
     const confirmed = await confirmIncludeCommands();
     if (!confirmed) return;
@@ -80,13 +91,14 @@ async function runExport(): Promise<void> {
     if (!path) return;
     message.success(`备份已导出：${path}`);
   } catch (err) {
-    message.error(`导出失败：${errorText(err)}`);
+    message.error(`导出失败：${describeError(err)}`);
   } finally {
     exporting.value = false;
   }
 }
 
 function importData(): void {
+  if (importing.value) return;
   dialog.warning({
     title: "从备份恢复数据？",
     content:
@@ -107,7 +119,7 @@ async function runImport(): Promise<void> {
     pendingRestart.value = true;
     showOutcome(outcome);
   } catch (err) {
-    message.error(`恢复失败：${errorText(err)}`);
+    message.error(`恢复失败：${describeError(err)}`);
   } finally {
     importing.value = false;
   }
@@ -140,41 +152,46 @@ function showOutcome(outcome: ImportOutcome): void {
 }
 
 async function restart(): Promise<void> {
+  if (restarting.value) return;
+  restarting.value = true;
   try {
     await api.restartApp();
   } catch (err) {
-    message.error(`重启失败：${errorText(err)}，请手动退出后重新打开应用。`);
+    message.error(`重启失败：${describeError(err)}，请手动退出后重新打开应用。`);
+  } finally {
+    restarting.value = false;
   }
 }
 </script>
 
 <style scoped>
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.option {
-  margin-bottom: 10px;
+.backup-actions {
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .restart-alert {
-  margin-bottom: 10px;
+  margin-top: 12px;
 }
 
-.restart-row {
+.restart-body {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
-@media (max-width: 720px) {
-  .restart-row {
+.backup-hint {
+  margin: 10px 0 0;
+}
+
+@media (max-width: 760px) {
+  .restart-body {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
   }
 }
 </style>

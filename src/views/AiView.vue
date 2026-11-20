@@ -1,60 +1,64 @@
 <template>
   <div class="page">
     <PageHead
-      title="AI 工具（实验）"
-      subtitle="多模型并行对比调试；凭据保存在本机，请求只发送到你配置的服务商。本机仅验证页面流程，真实 LLM 调用需自行配置凭据后验证。"
-    />
+      title="AI 工具"
+      subtitle="多模型并行对比调试；凭据保存在本机，不会上传到任何服务器。"
+      icon="sparkles"
+      tag="实验"
+    >
+      <span class="pill" :class="dirty ? 'pill-warn' : 'pill-ok'">
+        {{ dirty ? "AI 配置未保存" : "AI 配置已保存" }}
+      </span>
+      <n-button size="small" :disabled="!dirty || saving" :loading="saving" @click="save">
+        <template #icon><AppIcon name="save" :size="16" /></template>
+        保存 AI 配置
+      </n-button>
+    </PageHead>
 
-    <n-tabs v-model:value="tab" type="segment" :theme-overrides="tabsTheme">
-      <n-tab-pane name="llm" tab="LLM 调试台">
-        <LlmConsole />
-      </n-tab-pane>
-      <n-tab-pane name="keys" tab="API Key 管理器">
-        <KeyManager />
-      </n-tab-pane>
-    </n-tabs>
+    <div class="seg-wrap">
+      <n-tabs v-model:value="tab" type="segment" size="small">
+        <n-tab-pane name="llm">
+          <template #tab>
+            <span class="tab-label"><AppIcon name="zap" :size="16" />LLM 调试台</span>
+          </template>
+          <div class="tab-body"><LlmConsole /></div>
+        </n-tab-pane>
+        <n-tab-pane name="keys">
+          <template #tab>
+            <span class="tab-label"><AppIcon name="key" :size="16" />API Key 管理器</span>
+          </template>
+          <div class="tab-body"><KeyManager /></div>
+        </n-tab-pane>
+      </n-tabs>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { NTabPane, NTabs } from "naive-ui";
+import { NButton, NTabPane, NTabs } from "naive-ui";
+import AppIcon from "../components/AppIcon.vue";
 import PageHead from "../components/PageHead.vue";
 import LlmConsole from "../components/ai/LlmConsole.vue";
 import KeyManager from "../components/ai/KeyManager.vue";
+import { useLlmConfigSave } from "../composables/useLlmConfigSave";
+import { llmDirty, llmDraft } from "../composables/useLlmDraft";
 
 const tab = ref("llm");
 
-// 分段轨道比页面底色稍深，避免和背景连成一片；选中项用主色文字 + 加粗强化当前位置
-const tabsTheme = {
-  colorSegment: "#e3e8f1",
-  tabColorSegment: "#ffffff",
-  tabTextColorSegment: "#5b6475",
-  tabTextColorHoverSegment: "#1c2333",
-  tabTextColorActiveSegment: "#4f63e7",
-  // segment 模式选中项的字重走这个变量，tabFontWeightActive 在该模式下不生效
-  fontWeightStrong: "600",
-};
+// 保存与状态提示放在页头，调试台里的模型配置、模板改动共用这份草稿
+const dirty = llmDirty;
+const { saving, save } = useLlmConfigSave(llmDraft);
 </script>
 
 <style scoped>
-.page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-
-:deep(.n-tabs-rail) {
-  border: 1px solid #d3dbe7;
-  box-shadow: inset 0 1px 2px rgba(28, 35, 51, 0.06);
-}
-
-:deep(.n-tabs-capsule) {
-  box-shadow: 0 1px 4px rgba(28, 35, 51, 0.16);
-}
-
-:deep(.n-tabs-tab) {
-  font-size: 14px;
-  font-weight: 500;
+.tab-body {
+  /* 分段轨道下方与卡片之间留 16px（Naive 分段 tabs 自带 8px 内边距） */
+  margin-top: 8px;
 }
 </style>

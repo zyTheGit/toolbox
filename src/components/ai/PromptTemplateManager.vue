@@ -1,6 +1,5 @@
 <template>
   <div class="templates">
-    <div v-if="!templates.length" class="hint">还没有模板，点击下方按钮创建。</div>
     <div v-for="(template, index) in templates" :key="template.id" class="template">
       <div class="template-head">
         <n-input
@@ -12,11 +11,11 @@
           @update:value="patch(index, 'name', $event)"
         />
         <div class="vars">
-          <n-tag v-for="name in variables(template.content)" :key="name" size="tiny" :bordered="false">
-            {{ name }}
-          </n-tag>
+          <span v-for="name in variables(template.content)" :key="name" class="tag">{{ name }}</span>
         </div>
-        <n-button size="tiny" quaternary type="error" @click="remove(index)">删除</n-button>
+        <n-button quaternary circle size="small" type="error" title="删除模板" @click="remove(index)">
+          <template #icon><AppIcon name="trash" :size="16" /></template>
+        </n-button>
       </div>
       <n-input
         :value="template.content"
@@ -27,14 +26,23 @@
         @update:value="patch(index, 'content', $event)"
       />
     </div>
+
+    <p v-if="!templates.length" class="hint">
+      还没有模板，新建后可在调试台选择；模板中的 &#123;&#123;变量&#125;&#125; 会在发送前要求填写。
+    </p>
+
     <div>
-      <n-button size="small" dashed @click="add">新建模板</n-button>
+      <n-button size="small" dashed @click="add">
+        <template #icon><AppIcon name="plus" :size="16" /></template>
+        新建模板
+      </n-button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { NButton, NInput, NTag } from "naive-ui";
+import { NButton, NInput } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
 import { defaultTemplate, templateVariables } from "../../utils/llm";
 import type { LlmTemplate } from "../../types";
 
@@ -69,12 +77,13 @@ function variables(content: string): string[] {
   gap: 12px;
 }
 .template {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
 }
 .template-head {
   display: flex;
@@ -86,8 +95,8 @@ function variables(content: string): string[] {
 }
 .vars {
   display: flex;
+  flex: 1;
   gap: 4px;
   flex-wrap: wrap;
-  flex: 1;
 }
 </style>

@@ -56,9 +56,9 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 500;
-  color: #4b5468;
+  color: var(--text-2);
 }
 
 .row {

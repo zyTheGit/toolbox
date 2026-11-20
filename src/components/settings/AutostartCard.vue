@@ -1,52 +1,57 @@
 <template>
   <section class="card">
-    <h2 class="section-title">启动与后台</h2>
-    <div class="stack">
-      <div class="spread">
-        <div class="field-label">开机自启</div>
-        <n-switch
-          aria-label="开机自启"
-          :value="enabled"
-          :loading="busy"
-          :disabled="!supported || busy"
-          @update:value="toggle"
-        />
-      </div>
+    <div class="card-head">
+      <h3 class="card-title"><AppIcon name="power" :size="16" />启动与后台</h3>
+    </div>
 
-      <div v-if="!supported" class="hint">当前平台不支持开机自启。</div>
+    <SettingsRow
+      label="开机自启"
+      :desc="supported ? '登录系统后自动启动 Toolbox' : '当前平台不支持开机自启'"
+    >
+      <n-switch
+        aria-label="开机自启"
+        :value="enabled"
+        :loading="busy"
+        :disabled="!supported || busy"
+        @update:value="toggle"
+      />
+    </SettingsRow>
 
-      <n-alert v-if="mismatch" type="warning" :bordered="false">
-        <div>启动项路径与当前程序不一致，可能移动过程序。</div>
-        <div class="repair-row">
-          <n-button size="tiny" :loading="repairing" :disabled="repairing" @click="repair">
-            修复
-          </n-button>
-        </div>
-      </n-alert>
-
-      <div v-if="supported" class="sub-block">
-        <div class="spread">
-          <div class="field-label">自启时仅驻留托盘</div>
-          <n-switch v-model:value="startup.startMinimized" aria-label="自启时仅驻留托盘" />
-        </div>
-        <div class="row">
-          <span class="field-label">启动延迟</span>
-          <n-select
-            class="delay-select"
-            aria-label="启动延迟"
-            :value="startup.delaySeconds"
-            :options="delayOptions"
-            @update:value="setDelay"
-          />
-        </div>
+    <div v-if="mismatch" class="alert alert-warn mismatch">
+      <AppIcon name="alert" :size="16" />
+      <div class="mismatch-body">
+        <span>启动项路径与当前程序不一致，可能移动过程序。</span>
+        <n-button size="tiny" :loading="repairing" :disabled="repairing" @click="repair">
+          修复
+        </n-button>
       </div>
     </div>
+
+    <SettingsRow
+      v-if="supported"
+      label="自启时仅驻留托盘"
+      desc="开机自启时不弹出主窗口，仅驻留托盘"
+    >
+      <n-switch v-model:value="startup.startMinimized" aria-label="自启时仅驻留托盘" />
+    </SettingsRow>
+
+    <SettingsRow v-if="supported" label="启动延迟" desc="避免与开机高峰争抢资源">
+      <n-select
+        class="w-delay"
+        aria-label="启动延迟"
+        :value="startup.delaySeconds"
+        :options="delayOptions"
+        @update:value="setDelay"
+      />
+    </SettingsRow>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { NAlert, NButton, NSelect, NSwitch, useMessage } from "naive-ui";
+import { NButton, NSelect, NSwitch, useMessage } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
+import SettingsRow from "./SettingsRow.vue";
 import { api } from "../../api";
 import { store } from "../../store";
 import { describeError } from "../../utils/errors";
@@ -91,11 +96,8 @@ const delayOptions = computed(() => {
 });
 
 function setDelay(value: number | null): void {
-  props.startup.delaySeconds = value ?? 0;
-}
-
-function errorText(err: unknown): string {
-  return describeError(err);
+  if (value == null) return;
+  props.startup.delaySeconds = value;
 }
 
 async function toggle(value: boolean): Promise<void> {
@@ -110,7 +112,7 @@ async function toggle(value: boolean): Promise<void> {
     message.success(next.enabled ? "已开启开机自启" : "已关闭开机自启");
   } catch (err) {
     enabled.value = previous;
-    message.error(`设置开机自启失败：${errorText(err)}`);
+    message.error(`设置开机自启失败：${describeError(err)}`);
   } finally {
     busy.value = false;
   }
@@ -122,13 +124,18 @@ async function repair(): Promise<void> {
   try {
     const next = await api.autostartSet(true);
     store.autostart = next;
-    if (next.enabled && next.path && next.expectedPath && normalizePath(next.path) !== normalizePath(next.expectedPath)) {
+    if (
+      next.enabled &&
+      next.path &&
+      next.expectedPath &&
+      normalizePath(next.path) !== normalizePath(next.expectedPath)
+    ) {
       message.warning("启动项路径仍不一致，请手动检查注册项");
     } else {
       message.success("已修复开机自启路径");
     }
   } catch (err) {
-    message.error(`修复失败：${errorText(err)}`);
+    message.error(`修复失败：${describeError(err)}`);
   } finally {
     repairing.value = false;
   }
@@ -136,28 +143,32 @@ async function repair(): Promise<void> {
 </script>
 
 <style scoped>
-.field-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #4b5468;
+.mismatch {
+  margin-top: 12px;
 }
 
-.repair-row {
+.mismatch-body {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.sub-block {
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
-  display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
-.delay-select {
-  width: 140px;
+.w-delay {
+  width: 220px;
+}
+
+@media (max-width: 760px) {
+  .mismatch-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .w-delay {
+    width: 100%;
+  }
 }
 </style>

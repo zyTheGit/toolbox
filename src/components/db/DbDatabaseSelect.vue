@@ -1,14 +1,14 @@
 <template>
-  <div class="database-select" :title="selectedLabel">
+  <div class="database-select" :title="selectedText">
     <n-select
-      :value="value"
-      size="tiny"
+      :value="value || null"
+      size="small"
       filterable
       :consistent-menu-width="false"
-      :style="{ width: selectWidth }"
       :options="options"
       :loading="loading"
-      placeholder="选择或搜索数据库"
+      :disabled="disabled"
+      :placeholder="placeholder"
       @update:value="onSelect"
     />
   </div>
@@ -19,11 +19,16 @@ import { computed } from "vue";
 import { NSelect } from "naive-ui";
 import type { DbDatabase } from "../../types";
 
-const props = defineProps<{
-  databases: DbDatabase[];
-  value: string;
-  loading?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    databases: DbDatabase[];
+    value: string;
+    loading?: boolean;
+    disabled?: boolean;
+    placeholder?: string;
+  }>(),
+  { placeholder: "选择数据库" },
+);
 
 const emit = defineEmits<{
   "update:value": [value: string];
@@ -36,26 +41,18 @@ const options = computed(() =>
   })),
 );
 
-const selectedLabel = computed(
-  () => options.value.find((option) => option.value === props.value)?.label ?? "选择数据库",
+const selectedText = computed(
+  () => options.value.find((option) => option.value === props.value)?.label ?? props.placeholder,
 );
 
-// 库名长度差异很大，按文本宽度给选择器定宽，避免长库名被截断
-const selectWidth = computed(() => {
-  let width = 0;
-  for (const ch of selectedLabel.value) {
-    width += ch.charCodeAt(0) > 0xff ? 12 : 7;
-  }
-  return `${Math.min(380, Math.max(190, width + 44))}px`;
-});
-
 function onSelect(value: string | number | null): void {
-  if (typeof value === "string") emit("update:value", value);
+  if (typeof value === "string" && value !== props.value) emit("update:value", value);
 }
 </script>
 
 <style scoped>
 .database-select {
   flex: none;
+  width: 170px;
 }
 </style>

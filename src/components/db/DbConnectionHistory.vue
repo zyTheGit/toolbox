@@ -1,84 +1,116 @@
 <template>
-  <n-button size="small" :disabled="!entries.length" @click="open = true">
+  <n-button quaternary class="history-btn" title="最近连接" @click="open = true">
+    <template #icon>
+      <AppIcon name="history" :size="16" />
+    </template>
     最近连接
     <span v-if="entries.length" class="count">{{ entries.length }}</span>
   </n-button>
 
-  <n-drawer v-model:show="open" placement="right" width="min(400px, 92vw)">
-    <n-drawer-content title="最近连接" closable>
-      <n-input
-        v-model:value="keyword"
-        size="small"
-        clearable
-        placeholder="搜索名称或连接目标"
-        class="search"
+  <n-modal
+    v-model:show="open"
+    preset="card"
+    title="最近连接"
+    :style="{ width: '480px', maxWidth: '92vw' }"
+    :bordered="false"
+  >
+    <n-input
+      v-model:value="keyword"
+      size="small"
+      clearable
+      placeholder="搜索名称或连接目标"
+      class="search"
+    />
+
+    <div v-if="!entries.length" class="recent-empty">
+      <EmptyState
+        icon="history"
+        title="暂无连接记录"
+        description="连接成功后会自动记录到这里，可改名并回填连接串。"
       />
-      <div v-if="!entries.length" class="empty">连接成功后会出现在这里</div>
-      <div v-else-if="!filtered.length" class="empty">没有匹配的记录</div>
-      <div v-else class="list">
-        <div v-for="entry in filtered" :key="entry.id" class="item">
-          <div class="item-head">
-            <span class="kind">{{ kindLabel(entry.kind) }}</span>
-            <span class="date">{{ entry.updatedAt.slice(0, 10) }}</span>
-          </div>
-          <template v-if="editingId === entry.id">
-            <n-input
-              v-model:value="draftName"
-              size="small"
-              maxlength="60"
-              placeholder="记录名称"
-              :disabled="renaming"
-              class="rename-input"
-              @keydown.enter.prevent="saveRename(entry)"
-              @keydown.escape.prevent="cancelRename"
-            />
-            <div class="edit-actions">
-              <n-button
-                size="tiny"
-                type="primary"
-                :loading="renaming"
-                @click="saveRename(entry)"
-              >
-                保存
-              </n-button>
-              <n-button size="tiny" quaternary :disabled="renaming" @click="cancelRename">
-                取消
-              </n-button>
+    </div>
+    <div v-else-if="!filtered.length" class="recent-empty">
+      <EmptyState icon="search" title="没有匹配的记录" description="换个关键词试试。" />
+    </div>
+    <div v-else class="recent-list">
+      <div
+        v-for="entry in filtered"
+        :key="entry.id"
+        class="recent-item"
+        :class="{ editing: editingId === entry.id }"
+      >
+        <template v-if="editingId === entry.id">
+          <n-input
+            v-model:value="draftName"
+            size="small"
+            maxlength="60"
+            placeholder="记录名称"
+            :disabled="renaming"
+            @keydown.enter.prevent="saveRename(entry)"
+            @keydown.escape.prevent="cancelRename"
+          />
+          <n-button size="small" type="primary" :loading="renaming" @click="saveRename(entry)">
+            保存
+          </n-button>
+          <n-button size="small" quaternary :disabled="renaming" @click="cancelRename">
+            取消
+          </n-button>
+        </template>
+        <template v-else>
+          <div class="recent-info">
+            <div class="recent-title">
+              <b class="name ellipsis" :title="entry.name">{{ entry.name }}</b>
+              <span class="tag">{{ kindLabel(entry.kind) }}</span>
+              <span v-if="dbNameOf(entry)" class="tag tag-primary" :title="dbNameOf(entry)">
+                {{ dbNameOf(entry) }}
+              </span>
             </div>
-          </template>
-          <template v-else>
-            <button
-              type="button"
-              class="fill"
-              :disabled="revealing"
+            <div class="recent-meta">
+              <span
+                v-if="entry.label && entry.label !== entry.name"
+                class="mono target ellipsis"
+                :title="entry.label"
+              >
+                {{ entry.label }}
+              </span>
+              <span class="date">更新于 {{ entry.updatedAt.slice(0, 10) }}</span>
+            </div>
+          </div>
+          <div class="recent-actions">
+            <n-button
+              size="small"
+              :loading="fillingId === entry.id"
+              :disabled="!!fillingId && fillingId !== entry.id"
               @click="fill(entry)"
             >
-              <span class="text">
-                <span class="name" :title="entry.name">{{ entry.name }}</span>
-                <span
-                  v-if="entry.label && entry.label !== entry.name"
-                  class="label"
-                  :title="entry.label"
-                >
-                  {{ entry.label }}
-                </span>
-              </span>
-              <span class="action">回填</span>
-            </button>
-            <button type="button" class="rename" @click="startRename(entry)">改名</button>
-          </template>
-        </div>
+              回填
+            </n-button>
+            <n-button size="small" quaternary :disabled="!!fillingId" @click="startRename(entry)">
+              改名
+            </n-button>
+          </div>
+        </template>
       </div>
-      <p class="hint">点击记录会把完整连接串回填到上方输入框，连接串包含密码。</p>
-    </n-drawer-content>
-  </n-drawer>
+    </div>
+
+    <p class="hint foot">「回填」会把完整连接串（含密码）填入上方输入框。</p>
+
+    <template #footer>
+      <div class="modal-foot">
+        <n-button @click="open = false">关闭</n-button>
+      </div>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { NButton, NDrawer, NDrawerContent, NInput } from "naive-ui";
+import { NButton, NInput, NModal } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
+import EmptyState from "../EmptyState.vue";
 import { api } from "../../api";
 import { describeError } from "../../utils/errors";
+import { dbKindLabel as kindLabel } from "./sqlText";
 import type { DbHistoryEntry, DbKind } from "../../types";
 
 const emit = defineEmits<{
@@ -89,7 +121,7 @@ const emit = defineEmits<{
 const entries = ref<DbHistoryEntry[]>([]);
 const open = ref(false);
 const keyword = ref("");
-const revealing = ref(false);
+const fillingId = ref("");
 const renaming = ref(false);
 const editingId = ref("");
 const draftName = ref("");
@@ -113,8 +145,8 @@ async function refresh(): Promise<void> {
 }
 
 async function fill(entry: DbHistoryEntry): Promise<void> {
-  if (revealing.value) return;
-  revealing.value = true;
+  if (fillingId.value) return;
+  fillingId.value = entry.id;
   try {
     const connection = await api.dbHistoryReveal(entry.id);
     emit("fill", entry.kind, connection);
@@ -122,7 +154,7 @@ async function fill(entry: DbHistoryEntry): Promise<void> {
   } catch (err) {
     emit("error", `回填连接失败：${describeError(err)}`);
   } finally {
-    revealing.value = false;
+    fillingId.value = "";
   }
 }
 
@@ -158,9 +190,23 @@ async function saveRename(entry: DbHistoryEntry): Promise<void> {
   }
 }
 
-function kindLabel(value: DbKind): string {
-  if (value === "sqlite") return "SQLite";
-  return value === "postgres" ? "PostgreSQL" : "MySQL";
+/** 从脱敏连接目标里提取库名 / 文件名，仅用于展示标签，不做连接用途。 */
+function dbNameOf(entry: DbHistoryEntry): string {
+  const text = entry.label.trim();
+  if (!text) return "";
+  if (entry.kind === "sqlite") {
+    const parts = text.split(/[\\/]/);
+    return parts[parts.length - 1] || "";
+  }
+  const keywordMatch = text.match(/(?:^|\s)(?:dbname|database)\s*=\s*([^\s;]+)/i);
+  if (keywordMatch) return keywordMatch[1];
+  if (!text.includes("://")) return "";
+  const rest = text.split("://")[1] ?? "";
+  const path = rest.split(/[?#]/)[0] ?? "";
+  const slash = path.lastIndexOf("/");
+  if (slash < 0 || slash === path.length - 1) return "";
+  const name = path.slice(slash + 1);
+  return name.includes("@") ? "" : name;
 }
 
 onMounted(() => {
@@ -171,6 +217,9 @@ defineExpose({ refresh });
 </script>
 
 <style scoped>
+.history-btn {
+  gap: 6px;
+}
 .count {
   display: inline-flex;
   align-items: center;
@@ -179,7 +228,7 @@ defineExpose({ refresh });
   height: 16px;
   margin-left: 4px;
   padding: 0 4px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--primary-soft);
   color: var(--primary);
   font-size: 11px;
@@ -187,116 +236,65 @@ defineExpose({ refresh });
 .search {
   margin-bottom: 12px;
 }
-.empty {
-  padding: 40px 0;
-  text-align: center;
-  font-size: 13px;
-  color: var(--muted);
+.recent-empty {
+  padding: 8px 0;
 }
-.list {
+.recent-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.item {
+.recent-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 10px;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fafbfd;
-  color: #3c4557;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+  border-radius: var(--r-sm);
+  background: var(--surface-soft);
 }
-.item:hover {
-  border-color: var(--primary);
-  background: var(--primary-soft);
+.recent-item.editing {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
-.item-head {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.kind {
-  color: var(--primary);
-  font-size: 12px;
-  font-weight: 600;
-}
-.date {
-  color: var(--muted);
-  font-size: 11px;
-}
-.fill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.recent-info {
   min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
 }
-.fill:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.text {
+.recent-title {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 .name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
+  min-width: 0;
+  font-size: var(--fs-13);
   font-weight: 600;
 }
-.label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 11px;
+.recent-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  min-width: 0;
 }
-.action {
+.target {
+  min-width: 0;
+  color: var(--muted);
+}
+.date {
   margin-left: auto;
-  color: var(--primary);
-  font-size: 12px;
+  flex: none;
+  color: var(--faint);
+  font-size: var(--fs-12);
+}
+.recent-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
 }
-.rename {
-  align-self: center;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-}
-.rename:hover {
-  color: var(--primary);
-}
-.rename-input {
-  grid-column: 1 / -1;
-}
-.edit-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.hint {
-  margin: 16px 0 0;
-  font-size: 12px;
-  color: var(--muted);
+.foot {
+  margin: 12px 0 0;
 }
 </style>

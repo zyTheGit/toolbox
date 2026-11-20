@@ -9,30 +9,36 @@
         <div class="app-shell">
           <aside class="sidebar">
             <div class="brand">
-              <div class="brand-mark">T</div>
+              <div class="brand-mark"><AppIcon name="logo" :size="20" /></div>
               <div>
-                <div class="brand-name">Toolbox</div>
+                <div class="brand-name">
+                  Toolbox
+                  <span v-if="store.version" class="brand-ver">v{{ store.version }}</span>
+                </div>
                 <div class="brand-sub">桌面工具箱</div>
               </div>
             </div>
 
             <nav class="nav">
-              <button
-                v-for="item in navItems"
-                :key="item.key"
-                class="nav-item"
-                :class="{ active: page === item.key }"
-                :aria-current="page === item.key ? 'page' : undefined"
-                @click="page = item.key"
-              >
-                <span class="nav-icon" v-html="item.icon"></span>
-                <span>{{ item.label }}</span>
-              </button>
+              <template v-for="group in NAV_GROUPS" :key="group.label">
+                <div class="nav-group">{{ group.label }}</div>
+                <button
+                  v-for="item in group.items"
+                  :key="item.key"
+                  class="nav-item"
+                  :class="{ active: page === item.key }"
+                  :title="item.label"
+                  :aria-current="page === item.key ? 'page' : undefined"
+                  @click="page = item.key"
+                >
+                  <AppIcon :name="item.icon" />
+                  <span>{{ item.label }}</span>
+                  <em v-if="badgeOf(item.key)" class="nav-badge" :class="{ soft: item.soft }">
+                    {{ badgeOf(item.key) }}
+                  </em>
+                </button>
+              </template>
             </nav>
-
-            <div class="sidebar-foot">
-              <div class="version">v{{ store.version || "0.1.0" }}</div>
-            </div>
           </aside>
 
           <main class="main">
@@ -87,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch, defineAsyncComponent } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   NAlert,
   NButton,
@@ -97,24 +103,25 @@ import {
   NSpin,
   dateZhCN,
   zhCN,
-  type GlobalThemeOverrides,
 } from "naive-ui";
 import { connectEvents, loadSnapshot, store } from "./store";
 import { events } from "./api";
-// 视图异步分包：首屏只加载当前视图，减小主 chunk 体积。
-const TranslateView = defineAsyncComponent(() => import("./views/TranslateView.vue"));
-const DownloadView = defineAsyncComponent(() => import("./views/DownloadView.vue"));
-const TasksView = defineAsyncComponent(() => import("./views/TasksView.vue"));
-const DevView = defineAsyncComponent(() => import("./views/DevView.vue"));
-const DbView = defineAsyncComponent(() => import("./views/DbView.vue"));
-const AiView = defineAsyncComponent(() => import("./views/AiView.vue"));
-const SettingsView = defineAsyncComponent(() => import("./views/SettingsView.vue"));
+import { themeOverrides } from "./ui/theme";
+import type { IconName } from "./ui/icons";
+import AppIcon from "./components/AppIcon.vue";
+import TranslateView from "./views/TranslateView.vue";
+import DownloadView from "./views/DownloadView.vue";
+import TasksView from "./views/TasksView.vue";
+import DevView from "./views/DevView.vue";
+import DbView from "./views/DbView.vue";
+import AiView from "./views/AiView.vue";
+import SettingsView from "./views/SettingsView.vue";
 
 type PageKey = "translate" | "download" | "tasks" | "dev" | "db" | "ai" | "settings";
 
 const page = ref<PageKey>("translate");
 
-// 视图按需加载并按页面缓存：首次进入才拉取该页代码及其 naive-ui 组件
+// 静态导入视图并按页面缓存：桌面端资源在本地，切换零等待，避免异步分包首切白屏
 const views = {
   translate: TranslateView,
   download: DownloadView,
@@ -125,54 +132,47 @@ const views = {
   settings: SettingsView,
 };
 
-const navItems: Array<{ key: PageKey; label: string; icon: string }> = [
+interface NavItem {
+  key: PageKey;
+  label: string;
+  icon: IconName;
+  /** 软徽标：数量多但非紧急（如启用中的任务数） */
+  soft?: boolean;
+}
+
+const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
-    key: "translate",
-    label: "翻译",
-    icon: '<svg viewBox="0 0 24 24"><path d="M4 5h10"/><path d="M9 3v2"/><path d="M6 5c.6 3.6 2.8 6.4 6 8"/><path d="M11 5c-.6 3.4-2.6 6.2-5.5 8"/><path d="M4 19l4.5-10L13 19"/><path d="M6 15.5h5"/><path d="M16 8h5"/><path d="M18.5 6v2"/><path d="M15.5 8c.4 2.4 1.8 4.4 3.9 5.7"/><path d="M20 8c-.4 2.4-1.8 4.4-3.9 5.7"/></svg>',
+    label: "常用",
+    items: [
+      { key: "translate", label: "翻译", icon: "translate" },
+      { key: "download", label: "下载", icon: "download" },
+      { key: "tasks", label: "定时任务", icon: "clock", soft: true },
+    ],
   },
   {
-    key: "tasks",
-    label: "定时任务",
-    icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/><path d="M4 4l1.5 3"/><path d="M20 4l-1.5 3"/></svg>',
+    label: "工具",
+    items: [
+      { key: "dev", label: "开发工具", icon: "code" },
+      { key: "db", label: "数据库", icon: "database" },
+      { key: "ai", label: "AI 工具", icon: "sparkles" },
+    ],
   },
   {
-    key: "dev",
-    label: "开发工具",
-    icon: '<svg viewBox="0 0 24 24"><path d="M8 6l-5 6 5 6"/><path d="M16 6l5 6-5 6"/><path d="M13.5 4l-3 16"/></svg>',
-  },
-  {
-    key: "db",
-    label: "数据库",
-    icon: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
-  },
-  {
-    key: "ai",
-    label: "AI 工具",
-    icon: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg>',
-  },
-  {
-    key: "download",
-    label: "下载",
-    icon: '<svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 18h16"/><path d="M4 20h16"/></svg>',
-  },
-  {
-    key: "settings",
-    label: "设置",
-    icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>',
+    label: "系统",
+    items: [{ key: "settings", label: "设置", icon: "settings" }],
   },
 ];
 
-const themeOverrides: GlobalThemeOverrides = {
-  common: {
-    primaryColor: "#4f63e7",
-    primaryColorHover: "#6678f0",
-    primaryColorPressed: "#3f51d1",
-    primaryColorSuppl: "#6678f0",
-    borderRadius: "8px",
-    fontFamily: "var(--font-sans)",
-  },
-};
+const activeJobs = computed(
+  () => store.jobs.filter((job) => job.status === "queued" || job.status === "running").length,
+);
+const enabledTasks = computed(() => store.tasks.filter((task) => task.enabled).length);
+
+function badgeOf(key: PageKey): string {
+  if (key === "download" && activeJobs.value) return String(activeJobs.value);
+  if (key === "tasks" && enabledTasks.value) return String(enabledTasks.value);
+  return "";
+}
 
 let unlisteners: Array<() => void> = [];
 const reconnecting = ref(false);
@@ -271,5 +271,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+@media (max-width: 900px) {
+  .alert-wrap {
+    padding: 0 16px;
+  }
 }
 </style>

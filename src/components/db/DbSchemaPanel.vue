@@ -1,8 +1,12 @@
 <template>
-  <div class="schema-card">
-    <div class="schema-head">
-      <span class="title">结构</span>
-      <span class="count">{{ countText }}</span>
+  <div class="card schema-card">
+    <div class="card-head">
+      <h3 class="card-title">
+        <AppIcon name="table" :size="16" />
+        结构
+        <span v-if="database" class="tag tag-primary db-tag" :title="database">{{ database }}</span>
+      </h3>
+      <span class="hint">{{ countText }}</span>
     </div>
     <n-input
       v-model:value="keyword"
@@ -11,27 +15,32 @@
       clearable
       placeholder="搜索表 / 字段"
     />
-    <n-empty v-if="!filteredTables.length" size="small" :description="emptyText" />
-    <div v-else class="schema-list">
-      <div v-for="table in filteredTables" :key="table.name" class="table-block">
-        <div
-          class="table-item"
-          :class="{ active: table.name === active }"
-          @click="emit('select', table)"
-        >
-          <span v-if="expandAll" class="chev placeholder"></span>
-          <span v-else class="chev" @click.stop="toggle(table.name)">
-            {{ expanded[table.name] ? "▾" : "▸" }}
+
+    <div v-if="!filteredTables.length" class="empty tree-empty">
+      <AppIcon name="search" :size="20" />
+      <b>{{ emptyText }}</b>
+    </div>
+    <div v-else class="tree">
+      <div
+        v-for="table in filteredTables"
+        :key="table.name"
+        class="tree-item"
+        :class="{ open: isOpen(table), active: table.name === active }"
+      >
+        <div class="tree-head" :title="table.name" @click="onHead(table)">
+          <AppIcon name="chevron-right" :size="16" class="chev" />
+          <span class="tree-badge" :class="{ view: table.kind === 'view' }">
+            {{ table.kind === "view" ? "V" : "T" }}
           </span>
-          <span class="kind" :class="table.kind">{{ table.kind === "view" ? "V" : "T" }}</span>
-          <span class="name" :title="table.name">{{ table.name }}</span>
-          <span class="count">{{ table.columns.length }}</span>
+          <span class="name ellipsis">{{ table.name }}</span>
+          <span class="hint">{{ table.columns.length }}</span>
         </div>
-        <div v-if="expandAll || expanded[table.name]" class="cols">
-          <div v-for="col in columnsOf(table)" :key="col.name" class="col">
-            <span class="col-name" :title="col.name">{{ col.name }}</span>
-            <span class="col-type">{{ col.dataType }}</span>
-            <span v-if="col.primaryKey" class="pk">PK</span>
+        <div v-if="isOpen(table)" class="tree-cols">
+          <div v-for="col in columnsOf(table)" :key="col.name" class="tree-col">
+            <AppIcon v-if="col.primaryKey" name="key" :size="16" class="key" />
+            <span v-else class="key-slot"></span>
+            <span class="col-name ellipsis" :title="col.name">{{ col.name }}</span>
+            <span class="type">{{ col.dataType }}</span>
           </div>
         </div>
       </div>
@@ -41,12 +50,15 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
-import { NEmpty, NInput } from "naive-ui";
+import { NInput } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
 import type { DbTable } from "../../types";
 
 const props = defineProps<{
   tables: DbTable[];
   active: string;
+  /** 当前库名，展示在标题标签上 */
+  database?: string;
   emptyHint?: string;
 }>();
 
@@ -66,11 +78,13 @@ const filteredTables = computed(() => {
   );
 });
 
-const countText = computed(() =>
-  searching.value
-    ? `${filteredTables.value.length} / ${props.tables.length} 个对象`
-    : `${props.tables.length} 个对象`,
-);
+const tableCount = computed(() => props.tables.filter((table) => table.kind === "table").length);
+const viewCount = computed(() => props.tables.length - tableCount.value);
+
+const countText = computed(() => {
+  if (searching.value) return `${filteredTables.value.length} / ${props.tables.length} 个对象`;
+  return `${tableCount.value} 表${viewCount.value ? ` · ${viewCount.value} 视图` : ""}`;
+});
 
 const emptyText = computed(() =>
   searching.value ? "没有匹配的表或字段" : props.emptyHint || "没有可浏览的表",
@@ -83,123 +97,130 @@ function matches(text: string): boolean {
   return text.toLowerCase().includes(query.value);
 }
 
+function isOpen(table: DbTable): boolean {
+  if (expandAll.value) return true;
+  return !!expanded[table.name];
+}
+
 function columnsOf(table: DbTable): DbTable["columns"] {
   if (!searching.value || matches(table.name)) return table.columns;
   return table.columns.filter((col) => matches(col.name));
 }
 
-function toggle(name: string): void {
-  expanded[name] = !expanded[name];
+/** 点击表头：展开并执行默认查询；再次点击已展开的当前表则收起。 */
+function onHead(table: DbTable): void {
+  if (isOpen(table) && !expandAll.value) {
+    expanded[table.name] = false;
+    return;
+  }
+  expanded[table.name] = true;
+  if (table.name !== props.active) emit("select", table);
 }
 </script>
 
 <style scoped>
 .schema-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px;
+  margin-top: 0;
 }
-.schema-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #333b4d;
-}
-.count {
-  font-size: 12px;
-  color: var(--muted);
+.db-tag {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .schema-search {
   margin-bottom: 8px;
 }
-.schema-list {
-  max-height: calc(100vh - 360px);
-  overflow: auto;
-  padding-right: 4px;
+.tree {
+  max-height: 420px;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
 }
-.table-block + .table-block {
-  margin-top: 2px;
+.tree-item {
+  border-radius: 7px;
 }
-.table-item {
+.tree-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--fs-13);
+  color: var(--text-2);
 }
-.table-item:hover {
-  background: var(--panel-soft);
+.tree-head:hover {
+  background: var(--surface-soft);
 }
-.table-item.active {
+.tree-item.active > .tree-head {
   background: var(--primary-soft);
   color: var(--primary);
+  font-weight: 600;
 }
 .chev {
-  width: 12px;
-  color: var(--muted);
-  font-size: 11px;
-  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
 }
-.kind {
-  width: 16px;
-  height: 16px;
+.tree-item.open > .tree-head .chev {
+  transform: rotate(90deg);
+}
+.tree-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
+  width: 18px;
+  height: 18px;
   flex: none;
-  background: #eef1ff;
-  color: #4f63e7;
+  border-radius: 5px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
 }
-.kind.view {
-  background: #eefaf3;
-  color: #1f9d6b;
+.tree-badge.view {
+  background: var(--info-soft);
+  color: var(--info);
 }
 .name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.cols {
-  padding: 2px 8px 6px 34px;
+.tree-cols {
+  padding: 2px 0 6px 30px;
 }
-.col {
+.tree-col {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 2px 0;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--muted);
 }
+.key {
+  width: 12px;
+  height: 12px;
+  color: var(--warning);
+}
+.key-slot {
+  width: 12px;
+  flex: none;
+}
 .col-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
 }
-.col-type {
+.type {
   margin-left: auto;
-  font-size: 11px;
-  color: #9aa1b2;
   flex: none;
+  font-family: var(--font-mono);
+  color: var(--faint);
 }
-.pk {
-  font-size: 10px;
-  padding: 0 4px;
-  border-radius: 3px;
-  background: #fff4e5;
-  color: #b7791f;
-  flex: none;
+.tree-empty {
+  padding: 24px 8px;
+}
+.tree-empty .ic {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 2px;
 }
 </style>

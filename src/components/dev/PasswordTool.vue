@@ -1,39 +1,57 @@
 <template>
   <section class="card">
-    <div class="tool-head">
-      <span class="tool-title">随机密码</span>
-      <n-tag size="small" :type="strength.type" :bordered="false">{{ strength.text }}</n-tag>
+    <div class="card-head">
+      <h3 class="card-title"><AppIcon name="key" :size="16" />随机密码</h3>
+      <span class="pill" :class="strength.cls">{{ strength.text }}</span>
     </div>
 
-    <div class="password-row">
-      <span class="mono password-text" :class="{ placeholder: !password }">
+    <div class="spread">
+      <span class="hint">长度</span>
+      <span class="mono len-value">{{ length }}</span>
+    </div>
+    <input
+      v-model.number="length"
+      class="range"
+      type="range"
+      min="8"
+      max="64"
+      aria-label="密码长度"
+    />
+
+    <div class="checks">
+      <label class="check"><input v-model="sets.lower" type="checkbox" />小写</label>
+      <label class="check"><input v-model="sets.upper" type="checkbox" />大写</label>
+      <label class="check"><input v-model="sets.digit" type="checkbox" />数字</label>
+      <label class="check"><input v-model="sets.symbol" type="checkbox" />符号</label>
+      <label class="check"><input v-model="excludeAmbiguous" type="checkbox" />排除易混淆</label>
+    </div>
+
+    <div class="pwd-out">
+      <span class="mono pwd-text" :class="{ placeholder: !password }">
         {{ password || emptyHint }}
       </span>
-      <div class="actions">
-        <n-button size="tiny" text type="primary" :disabled="!password" @click="copy">复制</n-button>
-        <n-button size="tiny" text type="primary" @click="generate">重新生成</n-button>
-      </div>
+      <button
+        class="btn btn-ghost btn-sm btn-icon"
+        :class="{ loading: copying }"
+        :disabled="copying || !password"
+        title="复制"
+        @click="copy"
+      >
+        <AppIcon name="copy" :size="16" />
+      </button>
     </div>
 
-    <div class="length-row">
-      <span class="hint">长度</span>
-      <n-slider v-model:value="length" class="length-slider" :min="8" :max="64" />
-      <span class="mono length-value">{{ length }}</span>
-    </div>
-
-    <div class="option-row">
-      <n-checkbox v-model:checked="sets.lower">小写</n-checkbox>
-      <n-checkbox v-model:checked="sets.upper">大写</n-checkbox>
-      <n-checkbox v-model:checked="sets.digit">数字</n-checkbox>
-      <n-checkbox v-model:checked="sets.symbol">符号</n-checkbox>
-      <n-checkbox v-model:checked="excludeAmbiguous">排除易混淆</n-checkbox>
-    </div>
+    <button class="btn btn-primary btn-sm pwd-gen" @click="generate">
+      <AppIcon name="refresh" :size="16" />重新生成
+    </button>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watchEffect } from "vue";
-import { NButton, NCheckbox, NSlider, NTag, useMessage } from "naive-ui";
+import { useMessage } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
+import { copyText } from "../../utils/clipboard";
 
 const message = useMessage();
 
@@ -51,6 +69,7 @@ const sets = reactive({ lower: true, upper: true, digit: true, symbol: false });
 const excludeAmbiguous = ref(true);
 const length = ref(16);
 const password = ref("");
+const copying = ref(false);
 
 /** 过滤易混淆字符后的可用字符集 */
 const activeSets = computed(() => {
@@ -67,15 +86,15 @@ const emptyHint = computed(() =>
 const strength = computed(() => {
   const classes = activeSets.value.length;
   const size = password.value.length;
-  if (!size) return { text: "—", type: "default" as const };
+  if (!size) return { text: "—", cls: "pill-idle" };
   let score = 0;
   if (size >= 12) score += 1;
   if (size >= 16) score += 1;
   if (classes >= 3) score += 1;
   if (classes >= 4) score += 1;
-  if (score >= 4) return { text: "强", type: "success" as const };
-  if (score >= 2) return { text: "中", type: "warning" as const };
-  return { text: "弱", type: "error" as const };
+  if (score >= 4) return { text: "强", cls: "pill-ok" };
+  if (score >= 2) return { text: "中", cls: "pill-warn" };
+  return { text: "弱", cls: "pill-err" };
 });
 
 function filterAmbiguous(pool: string, exclude: boolean): string {
@@ -115,12 +134,17 @@ function generate(): void {
   password.value = chars.slice(0, length.value).join("");
 }
 
-function copy(): void {
-  if (!password.value) return;
-  void navigator.clipboard
-    .writeText(password.value)
-    .then(() => message.success("密码已复制"))
-    .catch(() => message.error("复制失败"));
+async function copy(): Promise<void> {
+  if (!password.value || copying.value) return;
+  copying.value = true;
+  try {
+    await copyText(password.value);
+    message.success("密码已复制");
+  } catch {
+    message.error("复制失败");
+  } finally {
+    copying.value = false;
+  }
 }
 
 // 长度或字符集变化时立即刷新，避免界面上留着旧密码
@@ -129,73 +153,49 @@ watchEffect(() => generate());
 
 <style scoped>
 .card {
-  background: var(--panel-soft);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.tool-head {
+/* 卡片本身已有 gap，抵消全局卡片标题的下外边距 */
+.card-head {
+  margin-bottom: 0;
+}
+
+.len-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 2px;
+}
+
+.pwd-out {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  margin-top: 2px;
 }
 
-.tool-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.password-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.password-text {
+.pwd-text {
   flex: 1;
-  font-size: 14px;
-  letter-spacing: 0.4px;
+  font-size: var(--fs-14);
   line-height: 1.6;
+  letter-spacing: 0.4px;
   word-break: break-all;
 }
 
-.password-text.placeholder {
-  font-size: 13px;
+.pwd-text.placeholder {
+  font-size: var(--fs-13);
   letter-spacing: 0;
   color: var(--muted);
 }
 
-.actions {
-  display: flex;
-  flex: none;
-  gap: 4px;
-}
-
-.length-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.length-slider {
-  flex: 1;
-}
-
-.length-value {
-  width: 24px;
-  text-align: right;
-}
-
-.option-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  /* 卡片被拉高时把选项贴到底部，避免内容挤在顶部 */
-  margin-top: auto;
+.pwd-gen {
+  align-self: flex-start;
 }
 </style>

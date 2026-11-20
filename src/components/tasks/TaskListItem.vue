@@ -1,24 +1,37 @@
 <template>
-  <div class="task-item">
+  <div class="task-row">
     <div class="task-main">
-      <div class="task-title-row">
-        <span class="task-name ellipsis">{{ displayName }}</span>
-        <n-tag size="small" :type="typeMeta.tag" :bordered="false">{{ typeMeta.label }}</n-tag>
-        <n-tag v-if="task.running" size="small" type="info" :bordered="false">运行中</n-tag>
-        <n-tag v-else-if="!task.enabled" size="small" :bordered="false">已停用</n-tag>
+      <div class="task-name">
+        <span class="name-text">{{ displayName }}</span>
+        <span class="tag" :class="{ 'tag-warn': isCommand }">{{ typeLabel }}</span>
+        <span v-if="!task.enabled" class="tag">已停用</span>
       </div>
 
-      <div class="task-meta">
-        <span class="cron-chip mono">{{ once ? "单次" : summary || task.cron }}</span>
+      <div class="task-sched">
+        <span class="cron-chip">
+          <AppIcon name="clock" />
+          {{ scheduleText }}
+        </span>
         <span v-if="once && task.runAt">指定 {{ formatDateTime(task.runAt, true) }}</span>
-        <span>下次运行 {{ task.nextRun ? formatDateTime(task.nextRun, once) : "—" }}</span>
+        <span>下次运行：{{ nextText }}</span>
       </div>
 
-      <div class="task-last">
+      <div v-if="task.running" class="task-live">
+        <StatusPill status="running" />
+        <span>开始于 {{ lastTime }}</span>
+        <span class="hint">
+          {{ isCommand ? "终端命令正在后台执行，完成后自动刷新结果。" : "提醒任务正在触发，完成后自动刷新结果。" }}
+        </span>
+      </div>
+
+      <div v-else class="task-last">
+        <span>上次：</span>
         <StatusPill :status="task.lastStatus" />
-        <span>上次 {{ task.lastRunAt ? formatDateTime(task.lastRunAt, true) : "—" }}</span>
-        <span v-if="lastError" class="task-msg error-text" :title="task.lastError">{{ lastError }}</span>
-        <span v-else-if="lastOutput" class="task-msg task-output" :title="task.lastOutput">{{ lastOutput }}</span>
+        <span>{{ lastTime }}</span>
+        <span v-if="lastOutput && !lastError" class="task-output" :title="task.lastOutput">
+          {{ lastOutput }}
+        </span>
+        <span v-if="lastError" class="task-err" :title="task.lastError">{{ lastError }}</span>
       </div>
 
       <div v-if="commandBlocked" class="hint blocked-hint">
@@ -31,18 +44,23 @@
         :value="task.enabled"
         :loading="busyAction === 'toggle'"
         :disabled="task.running || busy"
+        :title="task.enabled ? '停用' : '启用'"
         @update:value="onToggle"
       />
+
       <div class="task-actions">
         <n-button
           size="small"
-          type="primary"
           :disabled="task.running || commandBlocked || busy"
           :loading="busyAction === 'run'"
           @click="emit('run')"
         >
+          <template #icon>
+            <AppIcon name="play" :size="16" />
+          </template>
           立即运行
         </n-button>
+
         <n-button
           v-if="task.running"
           size="small"
@@ -54,22 +72,50 @@
         >
           取消
         </n-button>
-        <n-button size="small" :disabled="task.running || busy" @click="emit('edit')">编辑</n-button>
-        <n-button size="small" :disabled="busy" @click="emit('runs')">运行记录</n-button>
-        <n-popconfirm
-          positive-text="删除"
-          negative-text="取消"
-          @positive-click="emit('delete')"
+
+        <n-button
+          class="icon-btn"
+          size="small"
+          quaternary
+          :disabled="task.running || busy"
+          title="编辑"
+          aria-label="编辑"
+          @click="emit('edit')"
         >
+          <template #icon>
+            <AppIcon name="pencil" :size="16" />
+          </template>
+        </n-button>
+
+        <n-button
+          class="icon-btn"
+          size="small"
+          quaternary
+          :disabled="busy"
+          title="运行记录"
+          aria-label="运行记录"
+          @click="emit('runs')"
+        >
+          <template #icon>
+            <AppIcon name="history" :size="16" />
+          </template>
+        </n-button>
+
+        <n-popconfirm positive-text="删除" negative-text="取消" @positive-click="emit('delete')">
           <template #trigger>
             <n-button
+              class="icon-btn"
               size="small"
+              quaternary
               type="error"
-              ghost
               :loading="busyAction === 'delete'"
               :disabled="task.running || busy"
+              title="删除"
+              aria-label="删除"
             >
-              删除
+              <template #icon>
+                <AppIcon name="trash" :size="16" />
+              </template>
             </n-button>
           </template>
           删除任务「{{ displayName }}」？运行记录也会一并移除。
@@ -81,8 +127,9 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { NButton, NPopconfirm, NSwitch, NTag } from "naive-ui";
+import { NButton, NPopconfirm, NSwitch } from "naive-ui";
 import type { Task } from "../../types";
+import AppIcon from "../AppIcon.vue";
 import StatusPill from "../StatusPill.vue";
 import { TASK_TYPE_META, formatDateTime, truncate } from "./task-utils";
 import { cronSummary } from "../../utils/cron";
@@ -104,13 +151,22 @@ const emit = defineEmits<{
 
 const displayName = computed(() => props.task.name || "未命名任务");
 const once = computed(() => props.task.schedule === "once");
-const typeMeta = computed(() => TASK_TYPE_META[props.task.type] ?? TASK_TYPE_META.reminder);
+const isCommand = computed(() => props.task.type === "command");
+const typeLabel = computed(() => (TASK_TYPE_META[props.task.type] ?? TASK_TYPE_META.reminder).label);
 const summary = computed(() => cronSummary(props.task.cron));
+const scheduleText = computed(() => (once.value ? "仅一次" : summary.value || props.task.cron));
+const nextText = computed(() => {
+  if (!props.task.enabled || !props.task.nextRun) return "—";
+  return formatDateTime(props.task.nextRun, once.value);
+});
+const lastTime = computed(() =>
+  props.task.lastRunAt ? formatDateTime(props.task.lastRunAt, true) : "—",
+);
+const lastError = computed(() => props.task.lastError);
+const lastOutput = computed(() => truncate(props.task.lastOutput, 140));
 const busyAction = computed(() => props.busy ?? "");
 const busy = computed(() => Boolean(busyAction.value));
 const commandBlocked = computed(() => props.task.type === "command" && !props.allowCommands);
-const lastError = computed(() => truncate(props.task.lastError));
-const lastOutput = computed(() => truncate(props.task.lastOutput));
 
 function onToggle(value: boolean): void {
   emit("toggle", value);
@@ -118,15 +174,21 @@ function onToggle(value: boolean): void {
 </script>
 
 <style scoped>
-.task-item {
+.task-row {
   display: flex;
   align-items: flex-start;
-  gap: 18px;
-  padding: 16px 20px;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.task-item + .task-item {
-  border-top: 1px solid var(--border);
+.task-row:first-child {
+  padding-top: 0;
+}
+
+.task-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .task-main {
@@ -137,56 +199,83 @@ function onToggle(value: boolean): void {
   gap: 8px;
 }
 
-.task-title-row {
+.task-name {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  min-width: 0;
-}
-
-.task-name {
-  font-size: 14px;
+  font-size: var(--fs-14);
   font-weight: 600;
   color: var(--text);
-  max-width: 420px;
 }
 
-.task-meta {
+.name-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.task-sched {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
-  font-size: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -2px;
+  font-size: var(--fs-12);
   color: var(--muted);
 }
 
 .cron-chip {
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--panel-soft);
-  color: #394152;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: var(--fs-12);
+  font-weight: 500;
+}
+
+.cron-chip :deep(.ic) {
+  width: 12px;
+  height: 12px;
+}
+
+.task-live {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: var(--fs-12);
 }
 
 .task-last {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  font-size: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: var(--fs-12);
   color: var(--muted);
   min-width: 0;
 }
 
-.task-msg {
-  max-width: 460px;
+.task-output {
+  max-width: 420px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-mono);
+  color: var(--text-2);
 }
 
-.task-output {
-  color: #4a5468;
+.task-err {
+  flex-basis: 100%;
+  min-width: 0;
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .blocked-hint {
@@ -196,15 +285,37 @@ function onToggle(value: boolean): void {
 .task-side {
   flex: none;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
 }
 
 .task-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.task-side :deep(.icon-btn) {
+  width: var(--h-ctl-sm);
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  .task-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .task-side {
+    padding-top: 0;
+    flex-wrap: wrap;
+  }
+
+  .task-actions {
+    justify-content: flex-start;
+  }
 }
 </style>

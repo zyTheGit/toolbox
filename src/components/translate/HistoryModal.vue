@@ -1,52 +1,39 @@
 <template>
-  <n-drawer :show="show" :width="520" placement="right" @update:show="onShowChange">
-    <n-drawer-content title="翻译历史" :native-scrollbar="false" closable>
+  <n-modal :show="show" :style="modalStyle" @update:show="onShowChange">
+    <div class="hist-modal">
+      <div class="modal-head">
+        <h3>翻译历史</h3>
+        <n-button
+          quaternary
+          circle
+          size="small"
+          title="关闭"
+          aria-label="关闭"
+          @click="close"
+        >
+          <AppIcon name="x" :size="16" />
+        </n-button>
+      </div>
+
       <template v-if="historyEnabled">
-        <div class="filters">
-          <n-input
-            v-model:value="keyword"
-            size="small"
-            clearable
-            placeholder="搜索原文或译文"
-          />
-          <div class="filter-row">
-            <n-select
-              class="filter-select"
-              size="small"
-              :value="direction"
-              :options="directionOptions"
-              @update:value="onDirectionChange"
-            />
-            <n-select
-              class="filter-select"
-              size="small"
-              :value="provider"
-              :options="providerOptions"
-              @update:value="onProviderChange"
-            />
-            <div class="fav-toggle">
-              <n-switch v-model:value="favoritesOnly" size="small" />
-              <span class="hint">仅收藏</span>
-            </div>
-            <n-button
-              class="clear-btn"
-              size="small"
-              quaternary
-              type="error"
-              :disabled="total === 0"
-              @click="confirmClear"
-            >
-              清空
-            </n-button>
-          </div>
-          <div class="hint">共 {{ total }} 条记录</div>
+        <HistoryFilterBar
+          v-model:keyword="keyword"
+          v-model:direction="direction"
+          v-model:provider="provider"
+          v-model:favorites-only="favoritesOnly"
+        />
+        <div class="hist-summary">
+          <span class="hint">共 {{ total }} 条记录</span>
         </div>
 
-        <div v-if="loading" class="drawer-loading">
+        <div v-if="loading" class="hist-loading">
           <n-spin size="small" />
           <span class="muted">正在加载…</span>
         </div>
-        <p v-else-if="error" class="error-text">{{ error }}</p>
+        <div v-else-if="error" class="hist-error">
+          <p class="error-text">{{ error }}</p>
+          <n-button size="small" @click="reload">重试</n-button>
+        </div>
         <div v-else-if="entries.length" class="hist-list">
           <HistoryItem
             v-for="entry in entries"
@@ -71,23 +58,45 @@
             <span v-else class="hint">已加载全部 {{ total }} 条</span>
           </div>
         </div>
-        <EmptyState v-else title="没有匹配的记录" description="调整搜索或筛选条件后再试。" />
+        <EmptyState
+          v-else
+          icon="search"
+          title="没有匹配的记录"
+          description="调整搜索或筛选条件后再试。"
+        />
       </template>
-      <EmptyState v-else title="历史记录已关闭" description="可在「设置」中开启翻译历史后查看。" />
-    </n-drawer-content>
-  </n-drawer>
+      <EmptyState
+        v-else
+        icon="history"
+        title="历史记录已关闭"
+        description="可在「设置」中开启翻译历史后查看。"
+      />
+
+      <div class="modal-foot hist-foot">
+        <n-button
+          v-if="historyEnabled"
+          secondary
+          type="error"
+          size="small"
+          :disabled="total === 0"
+          @click="confirmClear"
+        >
+          <template #icon><AppIcon name="trash" :size="16" /></template>
+          清空历史
+        </n-button>
+        <span class="grow"></span>
+        <n-button @click="close">关闭</n-button>
+      </div>
+    </div>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   NButton,
-  NDrawer,
-  NDrawerContent,
-  NInput,
-  NSelect,
+  NModal,
   NSpin,
-  NSwitch,
   useDialog,
   useMessage,
 } from "naive-ui";
@@ -101,10 +110,18 @@ import type {
 import { api } from "../../api";
 import { store } from "../../store";
 import { describeError } from "../../utils/errors";
+import AppIcon from "../AppIcon.vue";
 import EmptyState from "../EmptyState.vue";
+import HistoryFilterBar from "./HistoryFilterBar.vue";
 import HistoryItem from "./HistoryItem.vue";
 
 const PAGE_SIZE = 50;
+const modalStyle = {
+  width: "640px",
+  maxWidth: "calc(100vw - 32px)",
+  marginTop: "8vh",
+  alignSelf: "flex-start",
+};
 
 const props = defineProps<{ show: boolean; refreshKey?: number }>();
 
@@ -130,35 +147,12 @@ const retranslatingId = ref("");
 
 const historyEnabled = computed(() => store.config?.history.enabled ?? true);
 
-const directionOptions = [
-  { label: "全部方向", value: "" },
-  { label: "自动识别", value: "auto" },
-  { label: "中译英", value: "zh2en" },
-  { label: "英译中", value: "en2zh" },
-];
-
-const providerOptions = computed(() => [
-  { label: "全部服务", value: "" },
-  ...store.providers.map((item) => ({ label: item.name, value: item.id as string })),
-]);
-
-type SelectValue = string | number | Array<string | number> | null;
-
-function keyOf(value: SelectValue): string {
-  if (Array.isArray(value)) return value.length ? String(value[0]) : "";
-  return value === null ? "" : String(value);
-}
-
-function onDirectionChange(value: SelectValue): void {
-  direction.value = keyOf(value);
-}
-
-function onProviderChange(value: SelectValue): void {
-  provider.value = keyOf(value);
-}
-
 function onShowChange(value: boolean): void {
   emit("update:show", value);
+}
+
+function close(): void {
+  emit("update:show", false);
 }
 
 function errorText(err: unknown): string {
@@ -343,38 +337,20 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.filters {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-bottom: 12px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--border);
+.hist-modal {
+  max-height: 84vh;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
 }
 
-.filter-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+.hist-summary {
+  margin-bottom: 6px;
 }
 
-.filter-select {
-  width: 118px;
-  flex: none;
-}
-
-.fav-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.clear-btn {
-  margin-left: auto;
-}
-
-.drawer-loading {
+.hist-loading {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -382,8 +358,26 @@ onBeforeUnmount(() => {
   padding: 48px 0;
 }
 
+.hist-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 0;
+  text-align: center;
+}
+
+.hist-error .error-text {
+  margin: 0;
+}
+
 .hist-list {
-  padding-top: 4px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.hist-list :deep(.hist-row:last-of-type) {
+  border-bottom: 0;
 }
 
 .load-more {
@@ -391,5 +385,15 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 18px 0 4px;
+}
+
+.hist-foot {
+  justify-content: flex-start;
+}
+
+@media (max-width: 560px) {
+  .hist-modal {
+    padding: 18px;
+  }
 }
 </style>

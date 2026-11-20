@@ -1,7 +1,7 @@
 import { onBeforeUnmount, ref } from "vue";
 
 const STORAGE_KEY = "toolbox.db.schemaWidth";
-const DEFAULT_WIDTH = 268;
+const DEFAULT_WIDTH = 264;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
 

@@ -1,32 +1,74 @@
 <template>
   <div class="page">
-    <PageHead title="定时任务" subtitle="按每天/每周等规则重复执行，或指定年月日时分秒只执行一次。">
+    <PageHead
+      title="定时任务"
+      icon="clock"
+      subtitle="按每天 / 每周等规则重复执行，或指定年月日时分秒只执行一次。"
+    >
       <n-button :loading="pausing" @click="togglePaused">
+        <template #icon>
+          <AppIcon :name="store.tasksPaused ? 'play' : 'pause'" :size="16" />
+        </template>
         {{ store.tasksPaused ? "全部恢复" : "全部暂停" }}
       </n-button>
-      <n-button type="primary" @click="openCreate">新建任务</n-button>
+      <n-button type="primary" @click="openCreate">
+        <template #icon>
+          <AppIcon name="plus" :size="16" />
+        </template>
+        新建任务
+      </n-button>
     </PageHead>
 
     <div v-if="store.tasksPaused || !allowCommands" class="notices">
-      <n-alert v-if="store.tasksPaused" type="warning" :bordered="false">
-        全部定时任务已暂停，手动运行仍可用。
-      </n-alert>
-      <n-alert v-if="!allowCommands" type="default" :bordered="false">
-        命令执行已在设置中关闭，终端任务不会触发。
-      </n-alert>
+      <div v-if="store.tasksPaused" class="alert alert-warn">
+        <AppIcon name="pause" :size="16" />
+        <span>全部定时任务已暂停，手动运行仍可用。</span>
+      </div>
+      <div v-if="!allowCommands" class="alert alert-warn">
+        <AppIcon name="alert" :size="16" />
+        <span>命令执行已在设置中关闭，终端任务不会触发。可在「设置 → 命令执行」中开启。</span>
+      </div>
     </div>
 
-    <div class="card tasks-card">
+    <div class="filter-row">
+      <button class="chip" :class="{ on: filter === 'all' }" @click="filter = 'all'">
+        全部 {{ counts.all }}
+      </button>
+      <button class="chip" :class="{ on: filter === 'on' }" @click="filter = 'on'">
+        已启用 {{ counts.on }}
+      </button>
+      <button class="chip" :class="{ on: filter === 'off' }" @click="filter = 'off'">
+        已停用 {{ counts.off }}
+      </button>
+    </div>
+
+    <div class="card">
       <EmptyState
         v-if="!store.tasks.length"
+        icon="clock"
         title="还没有定时任务"
-        description="可以设置一次性提醒，或按每天/每周等规则重复执行终端命令。"
+        description="新建一个提醒或终端任务，到点自动执行。"
       >
-        <n-button type="primary" @click="openCreate">新建任务</n-button>
+        <n-button type="primary" size="small" @click="openCreate">
+          <template #icon>
+            <AppIcon name="plus" :size="16" />
+          </template>
+          新建任务
+        </n-button>
       </EmptyState>
+
+      <EmptyState
+        v-else-if="!visibleTasks.length"
+        icon="filter"
+        title="没有符合条件的任务"
+        description="切换筛选条件查看其他任务。"
+      >
+        <n-button size="small" @click="filter = 'all'">查看全部</n-button>
+      </EmptyState>
+
       <template v-else>
         <TaskListItem
-          v-for="task in store.tasks"
+          v-for="task in visibleTasks"
           :key="task.id"
           :task="task"
           :allow-commands="allowCommands"
@@ -54,10 +96,11 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { NAlert, NButton, useMessage } from "naive-ui";
+import { NButton, useMessage } from "naive-ui";
 import { api, events } from "../api";
 import { store } from "../store";
 import type { Task } from "../types";
+import AppIcon from "../components/AppIcon.vue";
 import PageHead from "../components/PageHead.vue";
 import EmptyState from "../components/EmptyState.vue";
 import TaskListItem from "../components/tasks/TaskListItem.vue";
@@ -70,6 +113,19 @@ const message = useMessage();
 const allowCommands = computed(() => store.config?.security.allowCommands === true);
 const pausing = ref(false);
 const busy = reactive<Record<string, string>>({});
+
+type TaskFilter = "all" | "on" | "off";
+const filter = ref<TaskFilter>("all");
+const counts = computed(() => ({
+  all: store.tasks.length,
+  on: store.tasks.filter((task) => task.enabled).length,
+  off: store.tasks.filter((task) => !task.enabled).length,
+}));
+const visibleTasks = computed(() =>
+  filter.value === "all"
+    ? store.tasks
+    : store.tasks.filter((task) => (filter.value === "on" ? task.enabled : !task.enabled)),
+);
 
 const formShow = ref(false);
 const editing = ref<Task | null>(null);
@@ -110,6 +166,7 @@ async function syncTasks(): Promise<void> {
 }
 
 async function togglePaused(): Promise<void> {
+  if (pausing.value) return;
   pausing.value = true;
   try {
     store.tasksPaused = await api.tasksSetPaused(!store.tasksPaused);
@@ -229,8 +286,11 @@ async function handleDelete(task: Task): Promise<void> {
   margin-bottom: 16px;
 }
 
-.tasks-card {
-  padding: 0;
-  overflow: hidden;
+.filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 </style>

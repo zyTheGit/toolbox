@@ -1,82 +1,109 @@
 <template>
-  <div class="regex-tool">
-    <div class="card">
-      <div class="pattern-row">
-        <span class="regex-prefix mono">/</span>
-        <n-input
-          v-model:value="pattern"
-          class="pattern-input mono"
-          size="small"
-          placeholder="\d{4}-\d{2}-\d{2}"
-          spellcheck="false"
-        />
-        <span class="regex-prefix mono">/</span>
-        <n-input
-          v-model:value="flags"
-          class="flags-input mono"
-          size="small"
-          placeholder="gim"
-          spellcheck="false"
-        />
-        <n-select
-          class="preset-select"
-          size="small"
-          :value="presetValue"
-          :options="presetOptions"
-          placeholder="常用预设"
-          clearable
-          @update:value="applyPreset"
-        />
-      </div>
-
-      <n-alert v-if="regexError" type="error" :bordered="false" class="regex-error">
-        正则无效：{{ regexError }}
-      </n-alert>
-
-      <n-input
-        v-model:value="text"
-        type="textarea"
-        :autosize="false"
-        class="test-text"
-        placeholder="输入测试文本，匹配结果实时更新"
+  <div class="card regex-card">
+    <div class="pattern-row">
+      <span class="mono muted">/</span>
+      <input
+        v-model="pattern"
+        class="input mono grow pattern-input"
+        placeholder="1[3-9]\d{9}"
         spellcheck="false"
       />
-
-      <div class="hint-row">
-        <span class="hint">
-          命中 {{ matches.length }} 处{{ groupNames ? " · 含命名分组" : "" }}，高亮部分为匹配结果
-        </span>
-        <n-button size="small" text type="primary" @click="copyMatches">复制命中项</n-button>
-      </div>
+      <span class="mono muted">/</span>
+      <input
+        v-model="flags"
+        class="input mono flags-input"
+        placeholder="gim"
+        spellcheck="false"
+      />
     </div>
 
-    <div v-if="segments.length" class="card">
-      <div class="highlight mono">
-        <template v-for="(segment, index) in segments" :key="index">
-          <mark v-if="segment.hit" class="hit">{{ segment.text }}</mark>
-          <template v-else>{{ segment.text }}</template>
-        </template>
-      </div>
-    </div>
-
-    <div v-if="matches.length" class="card matches-card">
-      <div
-        v-for="(match, index) in matches"
-        :key="index"
-        class="match-item"
+    <div class="preset-row">
+      <span class="hint">常用预设：</span>
+      <button
+        v-for="preset in PRESETS"
+        :key="preset.label"
+        class="chip"
+        :class="{ on: pattern === preset.value }"
+        @click="applyPreset(preset.value)"
       >
-        <span class="match-index">#{{ index + 1 }}</span>
-        <span class="mono match-text selectable">{{ match.text }}</span>
-        <span class="hint">位置 {{ match.index }} · 长度 {{ match.text.length }}</span>
-        <span v-if="match.groups" class="mono match-groups">{{ match.groups }}</span>
+        {{ preset.label }}
+      </button>
+    </div>
+
+    <div class="regex-grid">
+      <div class="field">
+        <label for="re-text">测试文本</label>
+        <textarea
+          id="re-text"
+          v-model="text"
+          class="textarea mono regex-text"
+          spellcheck="false"
+          placeholder="输入测试文本，匹配结果实时更新"
+        ></textarea>
       </div>
+      <div class="field">
+        <label>匹配高亮 <span class="hint count">{{ countText }}</span></label>
+        <div class="regex-view mono">
+          <span v-if="regexError" class="danger">正则无效：{{ regexError }}</span>
+          <span v-else-if="!text" class="faint">（空文本）</span>
+          <template v-else-if="segments.length">
+            <template v-for="(segment, index) in segments" :key="index">
+              <mark v-if="segment.hit" class="match-mark">{{ segment.text }}</mark>
+              <span v-else>{{ segment.text }}</span>
+            </template>
+          </template>
+          <span v-else>{{ text }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap matches-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>匹配内容</th>
+            <th>位置</th>
+            <th>长度</th>
+            <th v-if="hasGroups">分组</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!matches.length">
+            <td :colspan="hasGroups ? 5 : 4" class="no-match">没有匹配</td>
+          </tr>
+          <tr v-for="(match, index) in matches" :key="index">
+            <td class="num">{{ index + 1 }}</td>
+            <td class="mono match-cell">{{ match.text }}</td>
+            <td class="num">{{ match.index }}</td>
+            <td class="num">{{ match.text.length }}</td>
+            <td v-if="hasGroups" class="mono faint match-cell">{{ match.groups || "—" }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="spread regex-foot">
+      <span class="hint">
+        支持 g i m s u y 标志{{ groupNames ? " · 已识别命名分组" : "" }}，最多展示 500 处匹配。
+      </span>
+      <button
+        class="btn btn-outline btn-sm"
+        :class="{ loading: copying }"
+        :disabled="copying || !matches.length"
+        @click="copyMatches"
+      >
+        <AppIcon name="copy" :size="16" />复制命中项
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { NAlert, NButton, NInput, NSelect, useMessage } from "naive-ui";
+import { useMessage } from "naive-ui";
+import AppIcon from "../AppIcon.vue";
+import { copyText } from "../../utils/clipboard";
 
 interface MatchInfo {
   text: string;
@@ -95,19 +122,16 @@ const pattern = ref("");
 const flags = ref("g");
 const text = ref("");
 const regexError = ref("");
+const copying = ref(false);
 
-const presetOptions = [
+const PRESETS = [
   { label: "手机号", value: "1[3-9]\\d{9}" },
   { label: "邮箱", value: "[\\w.+-]+@[\\w-]+\\.[\\w.]+" },
-  { label: "URL", value: "https?://[^\\s]+" },
-  { label: "日期 YYYY-MM-DD", value: "\\d{4}-\\d{2}-\\d{2}" },
-  { label: "IPv4", value: "(\\d{1,3}\\.){3}\\d{1,3}" },
-  { label: "十六进制色值", value: "#[0-9a-fA-F]{3,8}" },
+  { label: "URL", value: "https?://\\S+" },
+  { label: "日期", value: "\\d{4}-\\d{2}-\\d{2}" },
+  { label: "IPv4", value: "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b" },
+  { label: "色值", value: "#[0-9a-fA-F]{6}\\b" },
 ];
-
-const presetValue = computed(
-  () => presetOptions.find((item) => item.value === pattern.value)?.value ?? null,
-);
 
 const groupNames = computed(() => /<\w+>/.test(pattern.value));
 
@@ -115,8 +139,8 @@ const groupNames = computed(() => /<\w+>/.test(pattern.value));
 function tryBuild(): RegExp | null {
   regexError.value = "";
   const source = pattern.value.trim();
-  if (!source || !text.value) return null;
-  let cleanedFlags = flags.value.replace(/[^gimsuy]/g, "");
+  if (!source) return null;
+  const cleanedFlags = flags.value.replace(/[^gimsuy]/g, "");
   try {
     return new RegExp(source, cleanedFlags);
   } catch (err) {
@@ -178,140 +202,136 @@ const segments = computed<Segment[]>(() => {
   return parts;
 });
 
-function applyPreset(value: string | number | null): void {
-  if (typeof value === "string") {
-    pattern.value = value;
-    if (!flags.value.includes("g")) flags.value = `g${flags.value}`;
-  }
+const hasGroups = computed(
+  () => groupNames.value || matches.value.some((match) => Boolean(match.groups)),
+);
+
+const countText = computed(() => {
+  if (regexError.value || !text.value) return "";
+  return `· ${matches.value.length} 处匹配`;
+});
+
+function applyPreset(value: string): void {
+  pattern.value = value;
+  if (!flags.value.includes("g")) flags.value = `g${flags.value}`;
 }
 
-function copyMatches(): void {
-  if (!matches.value.length) {
-    message.warning("没有可复制的命中项");
+async function copyMatches(): Promise<void> {
+  if (!matches.value.length || copying.value) {
+    if (!matches.value.length) message.warning("没有可复制的命中项");
     return;
   }
-  const payload = matches.value.map((match) => match.text).join("\n");
-  void navigator.clipboard
-    .writeText(payload)
-    .then(() => message.success(`已复制 ${matches.value.length} 个命中项`))
-    .catch(() => message.error("复制失败"));
+  copying.value = true;
+  try {
+    await copyText(matches.value.map((match) => match.text).join("\n"));
+    message.success(`已复制 ${matches.value.length} 个命中项`);
+  } catch {
+    message.error("复制失败");
+  } finally {
+    copying.value = false;
+  }
 }
 </script>
 
 <style scoped>
-.regex-tool {
+.regex-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.card {
-  background: var(--panel-soft);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .pattern-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.regex-prefix {
-  font-size: 15px;
-  color: var(--muted, #6b7280);
+  gap: 8px;
 }
 
 .pattern-input {
-  flex: 1;
   min-width: 200px;
 }
 
 .flags-input {
   width: 64px;
-}
-
-.preset-select {
-  width: 150px;
-}
-
-.regex-error {
-  margin: 0;
-}
-
-.test-text {
-  min-height: 140px;
-}
-
-.test-text :deep(.n-input-wrapper),
-.test-text :deep(.n-input__textarea),
-.test-text :deep(textarea) {
-  height: 100%;
-  min-height: 140px;
-}
-
-.test-text :deep(textarea) {
-  font-family: Consolas, "JetBrains Mono", monospace;
-  resize: none;
-}
-
-.hint-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.highlight {
-  font-size: 13px;
-  line-height: 1.9;
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin: 0;
-  max-height: 240px;
-  overflow: auto;
-}
-
-.matches-card {
-  max-height: 260px;
-  overflow: auto;
-}
-
-.hit {
-  background: rgba(255, 213, 79, 0.5);
-  border-radius: 3px;
-  padding: 0 1px;
-  color: inherit;
-}
-
-.match-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-
-.match-item:last-child {
-  border-bottom: none;
-}
-
-.match-index {
-  color: var(--muted, #6b7280);
   flex: none;
 }
 
-.match-text {
+.preset-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.regex-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.regex-text {
+  min-height: 160px;
+  font-family: var(--font-mono);
+}
+
+.regex-view {
+  flex: 1;
+  min-height: 80px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-soft);
+  font-size: var(--fs-13);
+  line-height: 1.8;
+  white-space: pre-wrap;
   word-break: break-all;
 }
 
-.match-groups {
-  color: var(--muted, #6b7280);
+.count {
+  margin-left: 2px;
+}
+
+.match-mark {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-radius: 3px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.matches-wrap {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.matches-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.match-cell {
   word-break: break-all;
+}
+
+.no-match {
+  text-align: center;
+  color: var(--muted);
+}
+
+.regex-foot {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .regex-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

@@ -1,69 +1,75 @@
 <template>
   <div class="card">
-    <div class="section-title spread">
-      <span>队列 / 最近记录</span>
-      <span class="hint queue-hint">
-        同时下载 {{ downloadConcurrency }} 个<template v-if="activeJobs.length"> · 进行中 {{ activeJobs.length }}</template>
-      </span>
+    <div class="card-head">
+      <h3 class="card-title">
+        <AppIcon name="list" :size="16" />
+        下载队列
+        <span v-if="store.jobs.length" class="count">· {{ store.jobs.length }}</span>
+      </h3>
+      <span class="hint">同时下载 {{ downloadConcurrency }} 个</span>
     </div>
 
     <EmptyState
       v-if="!store.jobs.length"
       title="暂无下载任务"
-      description="在上方粘贴视频链接或分享文本，点击开始下载后会在这里看到进度。"
-    >
-      <template #icon>
-        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 4v10" />
-          <path d="M8 10l4 4 4-4" />
-          <path d="M4 18h16" />
-          <path d="M4 21h16" />
-        </svg>
-      </template>
-    </EmptyState>
+      description="粘贴视频链接或分享文本，开始第一个下载。"
+    />
 
     <template v-else>
-      <div v-if="activeJobs.length" class="group">
-        <div class="group-label">进行中 · {{ activeJobs.length }}</div>
+      <div class="group-label">进行中 · {{ activeJobs.length }}</div>
+      <div v-if="activeJobs.length">
         <JobRow v-for="job in activeJobs" :key="job.id" :job="job" />
       </div>
-      <div v-if="historyJobs.length" class="group">
-        <div class="group-label">历史 · {{ historyJobs.length }}</div>
-        <JobRow v-for="job in historyJobs" :key="job.id" :job="job" />
+      <div v-else class="empty queue-empty">
+        <AppIcon name="inbox" />
+        <b>暂无进行中的下载</b>
       </div>
+
+      <template v-if="historyJobs.length">
+        <div class="group-label history-label">历史 · {{ historyJobs.length }}</div>
+        <JobRow v-for="job in historyJobs" :key="job.id" :job="job" />
+      </template>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
+import AppIcon from "../AppIcon.vue";
 import EmptyState from "../EmptyState.vue";
 import JobRow from "./JobRow.vue";
+import { isActiveJob } from "./jobDisplay";
 import { store } from "../../store";
-import type { Job } from "../../types";
 
-function isActive(job: Job): boolean {
-  return job.status === "queued" || job.status === "running";
-}
-
-const activeJobs = computed(() => store.jobs.filter(isActive));
-const historyJobs = computed(() => store.jobs.filter((job) => !isActive(job)));
+const activeJobs = computed(() => store.jobs.filter(isActiveJob));
+const historyJobs = computed(() => store.jobs.filter((job) => !isActiveJob(job)));
 const downloadConcurrency = computed(() => store.config?.downloadConcurrency ?? 2);
 </script>
 
 <style scoped>
-.queue-hint {
-  flex: none;
+.group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
 }
 
-.group + .group {
+.history-label {
   margin-top: 16px;
 }
 
-.group-label {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 600;
-  margin-bottom: 6px;
+.queue-empty {
+  padding: 20px;
+  gap: 4px;
+}
+
+.queue-empty .ic {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 0;
 }
 </style>
