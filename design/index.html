@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toolbox 界面优化设计稿 · 设计规范</title>
+<link rel="stylesheet" href="assets/core.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); }
+  .spec-top {
+    position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; gap: 18px;
+    background: rgba(251, 251, 253, 0.92); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border); padding: 10px 28px;
+  }
+  .spec-top .brand { padding: 0; }
+  .spec-top nav { display: flex; gap: 2px; flex-wrap: wrap; }
+  .spec-top nav a {
+    font-size: var(--fs-13); color: var(--text-2); text-decoration: none;
+    padding: 5px 10px; border-radius: 7px;
+  }
+  .spec-top nav a:hover { background: var(--primary-soft); color: var(--primary); }
+  .spec-main { max-width: 1080px; margin: 0 auto; padding: 36px 28px 80px; }
+  section { scroll-margin-top: 72px; margin-bottom: 48px; }
+  .sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+  .sec-head h2 { margin: 0; font-size: var(--fs-20); font-weight: 650; letter-spacing: -0.01em; }
+  .sec-head .no { font-family: var(--font-mono); font-size: var(--fs-13); color: var(--primary); font-weight: 600; }
+  .sec-head p { margin: 0; font-size: var(--fs-13); color: var(--muted); }
+  .hero { padding: 20px 0 8px; }
+  .hero h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 8px; }
+  .hero p { color: var(--muted); font-size: var(--fs-14); max-width: 640px; margin: 0 0 18px; }
+  .hero .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 860px) { .grid-2, .grid-4 { grid-template-columns: 1fr; } }
+  .principle b { display: flex; align-items: center; gap: 8px; font-size: var(--fs-14); margin-bottom: 6px; }
+  .principle b .ic { color: var(--primary); width: 16px; height: 16px; }
+  .principle p { margin: 0; font-size: var(--fs-13); color: var(--muted); }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .swatch { border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; background: var(--surface); }
+  .swatch .chip-color { height: 52px; }
+  .swatch .meta { padding: 8px 10px; font-size: var(--fs-12); }
+  .swatch .meta b { display: block; font-size: var(--fs-13); }
+  .swatch .meta code { font-family: var(--font-mono); color: var(--muted); }
+  .type-row { display: flex; align-items: baseline; gap: 18px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .type-row:last-child { border-bottom: 0; }
+  .type-row .spec { flex: none; width: 200px; font-family: var(--font-mono); font-size: var(--fs-12); color: var(--muted); }
+  .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+  .icon-cell {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface);
+    padding: 14px 6px 10px; font-size: var(--fs-12); color: var(--muted);
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .icon-cell:hover { border-color: var(--primary); color: var(--primary); }
+  .icon-cell .ic { width: 20px; height: 20px; color: var(--text-2); }
+  .icon-cell:hover .ic { color: var(--primary); }
+  .demo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0; }
+  .demo-label { flex: none; width: 96px; font-size: var(--fs-12); color: var(--faint); }
+  .space-row { display: flex; align-items: center; gap: 14px; padding: 5px 0; font-size: var(--fs-12); color: var(--muted); }
+  .space-row .bar { height: 12px; border-radius: 3px; background: linear-gradient(90deg, var(--primary), var(--info)); }
+  .space-row code { font-family: var(--font-mono); width: 110px; flex: none; }
+  .view-card { display: block; text-decoration: none; color: inherit; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+  .view-card:hover { border-color: var(--primary); box-shadow: 0 4px 14px var(--primary-ring); }
+  .view-card b { display: flex; align-items: center; gap: 8px; font-size: var(--fs-14); }
+  .view-card b .ic { color: var(--primary); width: 16px; height: 16px; }
+  .view-card p { margin: 6px 0 0; font-size: var(--fs-12); color: var(--muted); }
+  .compare td:first-child { color: var(--danger); }
+  .compare td:last-child { color: var(--success); }
+</style>
+</head>
+<body data-page="spec">
+
+<header class="spec-top">
+  <div class="brand">
+    <div class="brand-mark" id="brand-mark"></div>
+    <div><div class="brand-name">Toolbox</div><div class="brand-sub">界面优化设计稿</div></div>
+  </div>
+  <nav>
+    <a href="#principles">设计原则</a><a href="#colors">色彩</a><a href="#type">字体</a>
+    <a href="#icons">图标</a><a href="#components">组件</a><a href="#layout">布局</a>
+    <a href="#compare">优化对照</a><a href="#views">视图设计稿</a>
+  </nav>
+</header>
+
+<main class="spec-main">
+  <div class="hero rise">
+    <span class="tag tag-primary">设计稿 v1 · 2026-11-20 · 不涉及代码改动</span>
+    <h1>整体界面优化设计规范</h1>
+    <p>针对现有界面的两类问题——字体与图标风格不统一、布局样式不一致——收敛为一套设计令牌与组件规范。
+       下方七个视图设计稿均按本规范绘制，可直接在浏览器中打开体验。</p>
+    <div class="chips">
+      <span class="tag">字阶收敛 6 档</span><span class="tag">图标统一 1 套</span>
+      <span class="tag">语义色令牌</span><span class="tag">侧栏分组导航</span><span class="tag">状态胶囊统一</span>
+    </div>
+    <div class="row">
+      <a class="btn btn-primary" href="translate.html" id="hero-go">浏览视图设计稿</a>
+      <a class="btn btn-outline" href="#compare">查看优化对照</a>
+    </div>
+  </div>
+
+  <section id="principles">
+    <div class="sec-head"><span class="no">01</span><h2>设计原则</h2></div>
+    <div class="grid-4" id="principles-grid"></div>
+  </section>
+
+  <section id="colors">
+    <div class="sec-head"><span class="no">02</span><h2>色彩系统</h2><p>沿用品牌靛蓝，全部收敛为语义令牌，禁止硬编码色值</p></div>
+    <h3 class="card-title" style="margin-bottom:10px">主色</h3>
+    <div class="swatches" id="sw-primary"></div>
+    <h3 class="card-title" style="margin:18px 0 10px">语义色</h3>
+    <div class="swatches" id="sw-semantic"></div>
+    <h3 class="card-title" style="margin:18px 0 10px">中性色</h3>
+    <div class="swatches" id="sw-neutral"></div>
+  </section>
+
+  <section id="type">
+    <div class="sec-head"><span class="no">03</span><h2>字体规范</h2><p>字号仅允许 12 / 13 / 14 / 16 / 20 / 24 六档，废除 11 / 11.5 / 12.5</p></div>
+    <div class="card">
+      <div class="type-row"><span class="spec">24px / 700 · 展示标题</span><span style="font-size:24px;font-weight:700;letter-spacing:-0.02em">桌面工具箱 Toolbox</span></div>
+      <div class="type-row"><span class="spec">20px / 650 · 页头标题</span><span style="font-size:20px;font-weight:650;letter-spacing:-0.01em">定时任务</span></div>
+      <div class="type-row"><span class="spec">16px / 650 · 弹窗标题</span><span style="font-size:16px;font-weight:650">新建任务</span></div>
+      <div class="type-row"><span class="spec">14px / 400–600 · 正文与按钮</span><span>按每天 / 每周等规则重复执行，或指定时间只执行一次。</span></div>
+      <div class="type-row"><span class="spec">13px / 400–600 · 辅助与表格</span><span class="muted">调用 yt-dlp 下载视频、音频与字幕，支持 m3u8 链接。</span></div>
+      <div class="type-row"><span class="spec">12px / 400–600 · 说明与标签</span><span class="hint">凭据保存在本机，不会上传到任何服务器。</span></div>
+      <div class="type-row"><span class="spec">mono 12px · 代码与数据</span><span class="mono">SELECT * FROM tasks WHERE enabled = 1; -- 0.42ms</span></div>
+    </div>
+    <div class="grid-2" style="margin-top:14px">
+      <div class="card"><h3 class="card-title">中西文混排</h3>
+        <p class="hint" style="margin:0">西文 Inter Variable，中文按平台回退：PingFang SC → Microsoft YaHei UI → Noto Sans CJK SC。
+        保留 <span class="mono">text-autospace: normal</span> 自动中西文间距；全局行高 1.6，避免中文回退字体行盒跳动。</p></div>
+      <div class="card"><h3 class="card-title">字重规则</h3>
+        <p class="hint" style="margin:0">正文 400；表单标签 / 按钮 / 强调 500；卡片标题 / 激活导航 600；页头 650；展示标题 700。
+        等宽字体统一 JetBrains Mono → Cascadia Mono → Consolas，仅用于代码、URL、数字列。</p></div>
+    </div>
+  </section>
+
+  <section id="icons">
+    <div class="sec-head"><span class="no">04</span><h2>图标系统</h2><p>一套 SVG sprite 替代手写内联 SVG、★/☆、▸/▾ 字符三套混用</p></div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="demo-row"><span class="demo-label">绘制规范</span>
+        <span class="hint">24×24 网格 · 描边 1.75 · 圆头圆角 · 不填充（星形收藏等语义填充除外）</span></div>
+      <div class="demo-row"><span class="demo-label">使用尺寸</span>
+        <span class="row">16px 按钮内 <svg class="ic ic-16" viewBox="0 0 24 24"><use href="#i-copy"></use></svg>
+        18px 导航 <svg class="ic" viewBox="0 0 24 24"><use href="#i-clock"></use></svg>
+        20px 页头 <svg class="ic ic-20" viewBox="0 0 24 24"><use href="#i-sparkles"></use></svg></span></div>
+      <div class="demo-row"><span class="demo-label">颜色规则</span>
+        <span class="hint">继承 currentColor：按钮内随文字色，卡片标题用主色，空状态用 --border-strong</span></div>
+    </div>
+    <div class="icon-grid" id="icon-grid"></div>
+  </section>
+
+  <section id="components">
+    <div class="sec-head"><span class="no">05</span><h2>组件规范</h2><p>按钮 / 状态胶囊 / 表单 / 表格 / 空状态，全部视图共用</p></div>
+    <div class="card">
+      <div class="demo-row"><span class="demo-label">按钮</span>
+        <button class="btn btn-primary" id="demo-save">保存设置</button>
+        <button class="btn btn-outline">浏览目录</button>
+        <button class="btn btn-ghost">放弃修改</button>
+        <button class="btn btn-danger">删除</button>
+        <button class="btn btn-primary btn-sm">立即运行</button>
+        <button class="btn btn-outline btn-sm btn-icon" title="复制"><svg class="ic" viewBox="0 0 24 24"><use href="#i-copy"></use></svg></button>
+      </div>
+      <div class="demo-row"><span class="demo-label">状态胶囊</span>
+        <span class="pill pill-idle">未运行</span><span class="pill pill-run">运行中</span>
+        <span class="pill pill-ok">已完成</span><span class="pill pill-err">失败</span>
+        <span class="pill pill-warn">已跳过</span><span class="pill pill-idle">已取消</span>
+      </div>
+      <div class="demo-row"><span class="demo-label">标签</span>
+        <span class="tag">提醒</span><span class="tag tag-warn">终端</span>
+        <span class="tag tag-primary">翻译内置</span><span class="tag">1080p</span><span class="tag">中英字幕</span>
+      </div>
+      <div class="demo-row"><span class="demo-label">表单</span>
+        <input class="input" style="width:200px" placeholder="任务名称">
+        <select class="select" style="width:150px"><option>每天 09:00</option><option>每周</option></select>
+        <label class="switch"><input type="checkbox" checked><i></i></label>
+        <label class="check"><input type="checkbox" checked>失败自动回退</label>
+      </div>
+      <div class="demo-row"><span class="demo-label">分段 / 芯片</span>
+        <div class="seg"><button class="on">自动检测</button><button>中译英</button><button>英译中</button></div>
+        <button class="chip on">全部</button><button class="chip">运行中</button><button class="chip">已停用</button>
+      </div>
+      <div class="demo-row"><span class="demo-label">进度</span>
+        <div class="progress grow"><i style="width:62%"></i></div><span class="hint">62% · 3.2 MB/s</span>
+      </div>
+      <div class="demo-row"><span class="demo-label">提示条</span>
+        <div class="alert alert-warn grow"><svg class="ic" viewBox="0 0 24 24"><use href="#i-alert"></use></svg>命令执行已关闭，终端类任务将被跳过。可在「设置 → 命令执行」中开启。</div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:14px">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="table-wrap" style="border:0;border-radius:0">
+          <table class="tbl">
+            <thead><tr><th>名称</th><th>服务</th><th>状态</th><th style="text-align:right">操作</th></tr></thead>
+            <tbody>
+              <tr><td>DeepSeek 主密钥</td><td>DeepSeek</td><td><span class="pill pill-ok">有效</span></td>
+                <td style="text-align:right"><button class="btn btn-ghost btn-sm btn-icon"><svg class="ic" viewBox="0 0 24 24"><use href="#i-copy"></use></svg></button></td></tr>
+              <tr><td>百度翻译</td><td>百度</td><td><span class="pill pill-warn">30 天后过期</span></td>
+                <td style="text-align:right"><button class="btn btn-ghost btn-sm btn-icon"><svg class="ic" viewBox="0 0 24 24"><use href="#i-pencil"></use></svg></button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="empty" style="padding:20px">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-inbox"></use></svg>
+          <b>暂无下载任务</b><p>粘贴视频链接或分享文本，开始第一个下载。</p>
+          <button class="btn btn-outline btn-sm">新建下载</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="layout">
+    <div class="sec-head"><span class="no">06</span><h2>布局规范</h2><p>4px 间距网格 · 侧栏分组 · 页头三段式 · 卡片 12px 圆角</p></div>
+    <div class="grid-2">
+      <div class="card">
+        <h3 class="card-title" style="margin-bottom:12px">间距阶梯</h3>
+        <div class="space-row"><code>--sp-1 · 4px</code><div class="bar" style="width:4px"></div>图标与文字</div>
+        <div class="space-row"><code>--sp-2 · 8px</code><div class="bar" style="width:8px"></div>按钮间距</div>
+        <div class="space-row"><code>--sp-3 · 12px</code><div class="bar" style="width:12px"></div>表单行距</div>
+        <div class="space-row"><code>--sp-4 · 16px</code><div class="bar" style="width:16px"></div>卡片间距</div>
+        <div class="space-row"><code>--sp-5 · 20px</code><div class="bar" style="width:20px"></div>卡片内边距</div>
+        <div class="space-row"><code>--sp-8 · 32px</code><div class="bar" style="width:32px"></div>页面左右留白</div>
+      </div>
+      <div class="card">
+        <h3 class="card-title" style="margin-bottom:12px">结构规则</h3>
+        <div class="stack" style="gap:10px">
+          <div class="kv"><b>侧栏</b><span>224px，按「常用 / 工具 / 系统」分组；进行中下载与启用任务显示徽标；版本号徽标跟随品牌名</span></div>
+          <div class="kv"><b>页头</b><span>图标 + 20px 标题 + 13px 描述，右侧操作区；试验性功能加「实验」徽标</span></div>
+          <div class="kv"><b>内容区</b><span>最大 1280px 居中，卡片 12px 圆角 / 1px 边框 / 轻阴影，卡片标题 13px 带主色图标</span></div>
+          <div class="kv"><b>控件</b><span>高度统一 34px（紧凑 28px），圆角 8px；聚焦主色描边 + 3px 光环</span></div>
+          <div class="kv"><b>窄屏</b><span>&lt;900px 侧栏收成 64px 图标栏，表单降为单栏，页头纵排</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="compare">
+    <div class="sec-head"><span class="no">07</span><h2>优化对照</h2><p>现有问题 → 设计稿方案</p></div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="table-wrap" style="border:0;border-radius:0">
+        <table class="tbl compare">
+          <thead><tr><th style="width:46%">现状问题</th><th>设计稿方案</th></tr></thead>
+          <tbody>
+            <tr><td>图标三套混用：手写内联 SVG、★/☆ 收藏、▸/▾ 展开符</td><td>统一 SVG sprite：24 网格 / 1.75 描边 / 圆头圆角，收藏与展开改用 star / chevron 图标</td></tr>
+            <tr><td>字号碎片化：11 / 11.5 / 12 / 12.5 / 13 / 14px 并存</td><td>收敛为 12 / 13 / 14 / 16 / 20 / 24 六档字阶，按用途取档</td></tr>
+            <tr><td>标签色硬编码（#4a5265、#333b4d 等）散落各组件</td><td>全部走语义令牌：--text-2 / --muted / --faint 四级文字色</td></tr>
+            <tr><td>侧栏 7 项平铺，无分组、无运行状态提示</td><td>按「常用 / 工具 / 系统」分组，下载 / 任务显示数量徽标，版本号徽标跟随品牌名</td></tr>
+            <tr><td>状态展示混用 n-tag 与自定义标签，语义色不一致</td><td>统一 StatusPill：圆点 + 文字，五种语义色，运行中圆点呼吸</td></tr>
+            <tr><td>高级选项用原生 details，其余用 n-collapse</td><td>统一折叠面板样式：chevron 旋转指示 + 浅底容器</td></tr>
+            <tr><td>表格三套：自绘 div 表（数据库 / Key 管理）与 n-data-table</td><td>统一表格规范：表头浅底 12px、行悬停、NULL 灰斜体、数字列等宽</td></tr>
+            <tr><td>空状态三套：EmptyState / n-empty / 裸 div</td><td>统一空状态：36px 线性图标 + 14px 标题 + 12px 描述 + 可选操作</td></tr>
+            <tr><td>按钮多为纯文字，图标缺失、异步加载态不全</td><td>按钮统一图标 + 文字，异步操作一律 loading 旋转 + 禁用防重复</td></tr>
+            <tr><td>页头标题 22px 与卡片标题层级不清</td><td>页头 20px 带主色图标，卡片标题 13px 次级色，层级一目了然</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="views">
+    <div class="sec-head"><span class="no">08</span><h2>视图设计稿</h2><p>点击任意卡片进入对应视图的高保真设计稿</p></div>
+    <div class="grid-4" id="view-grid"></div>
+  </section>
+</main>
+
+<script src="assets/shell.js"></script>
+<script>
+  document.getElementById("brand-mark").innerHTML = icon("logo");
+  document.getElementById("hero-go").insertAdjacentHTML("afterbegin", icon("chevron-right"));
+
+  const principles = [
+    ["shield", "一致性优先", "同一语义只有一种视觉表达：状态、按钮、空状态全站复用同一组件。"],
+    ["zap", "语义化令牌", "颜色、字号、间距全部走令牌，改一处全局生效，杜绝硬编码。"],
+    ["list", "层级清晰", "页头 → 卡片标题 → 正文 → 说明四级层级，扫一眼即知结构。"],
+    ["clock", "克制动效", "仅保留入场、悬停、加载与运行中呼吸四类动效，服务于状态感知。"],
+  ];
+  document.getElementById("principles-grid").innerHTML = principles.map(([ic, t, d]) =>
+    `<div class="card principle"><b>${icon(ic)}${t}</b><p>${d}</p></div>`).join("");
+
+  const sw = (list) => list.map(([name, token, hex, note]) =>
+    `<div class="swatch"><div class="chip-color" style="background:${hex}"></div>
+     <div class="meta"><b>${name}</b><code>${token}</code><br><span class="muted">${hex} · ${note}</span></div></div>`).join("");
+  document.getElementById("sw-primary").innerHTML = sw([
+    ["主色", "--primary", "#4f63e7", "主按钮 / 激活态"],
+    ["主色·悬停", "--primary-hover", "#6678f0", "hover"],
+    ["主色·按下", "--primary-pressed", "#3f51d1", "active"],
+    ["主色·浅底", "--primary-soft", "#eef1ff", "激活导航 / 标签"],
+  ]);
+  document.getElementById("sw-semantic").innerHTML = sw([
+    ["成功", "--success", "#1f9d6b", "已完成 / 有效"],
+    ["警告", "--warning", "#b7791f", "已跳过 / 将过期"],
+    ["危险", "--danger", "#d64545", "失败 / 删除"],
+    ["信息", "--info", "#2f6fed", "运行中 / 排队"],
+  ]);
+  document.getElementById("sw-neutral").innerHTML = sw([
+    ["页面背景", "--bg", "#f4f5f9", "主区底色"],
+    ["表面", "--surface", "#ffffff", "卡片"],
+    ["侧栏", "--sidebar-bg", "#fbfbfd", "导航"],
+    ["边框", "--border", "#e6e8ee", "分隔"],
+    ["正文", "--text", "#1c2333", "标题正文"],
+    ["次级文字", "--text-2", "#4a5265", "标签 / 按钮"],
+    ["弱化文字", "--muted", "#6b7280", "描述"],
+    ["最弱文字", "--faint", "#9aa1ad", "占位 / 版本"],
+  ]);
+
+  document.getElementById("icon-grid").innerHTML = Object.keys(ICON_PATHS).map((name) =>
+    `<div class="icon-cell">${icon(name)}<span>${name}</span></div>`).join("");
+
+  const views = [
+    ["translate", "翻译", "双栏对照 + 最近翻译，方向分段与朗读复制图标化"],
+    ["download", "下载", "新建表单 + 队列卡片，进度 / 日志 / 失败建议统一"],
+    ["tasks", "定时任务", "筛选芯片 + 任务行，开关 / 运行 / 记录操作图标化"],
+    ["dev", "开发工具", "五个工具分段页，JSON / 编解码 / 正则 / curl / 辅助"],
+    ["db", "数据库", "连接卡 + 结构树 / SQL / 结果表；MySQL / PostgreSQL 可切换数据库"],
+    ["ai", "AI 工具", "LLM 并行对比台 + API Key 管理表格"],
+    ["settings", "设置", "分组卡片 + 底部粘性保存栏，脏状态实时提示"],
+  ];
+  const viewIcon = { translate: "translate", download: "download", tasks: "clock", dev: "code", db: "database", ai: "sparkles", settings: "settings" };
+  document.getElementById("view-grid").innerHTML = views.map(([key, t, d]) =>
+    `<a class="card view-card" href="${key}.html"><b>${icon(viewIcon[key])}${t}</b><p>${d}</p></a>`).join("");
+
+  document.getElementById("demo-save").addEventListener("click", async (e) => {
+    await busy(e.currentTarget, 900);
+    toast("所有修改已保存");
+  });
+</script>
+</body>
+</html>

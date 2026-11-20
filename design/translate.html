@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>翻译 · Toolbox 界面优化设计稿</title>
+<link rel="stylesheet" href="assets/core.css">
+<link rel="stylesheet" href="assets/shell.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  .translate-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .translate-grid { grid-template-columns: 1fr; } }
+  .pane { display: flex; flex-direction: column; min-height: 320px; }
+  .pane .textarea { flex: 1; min-height: 180px; border: 0; padding: 4px 2px; box-shadow: none !important; }
+  .pane .textarea:focus { border: 0; }
+  .pane-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .out-text { flex: 1; padding: 4px 2px; white-space: pre-wrap; word-break: break-word; }
+  .out-meta { display: flex; align-items: center; gap: 8px; font-size: var(--fs-12); color: var(--muted); }
+  .hist-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .hist-row:last-child { border-bottom: 0; }
+  .hist-texts { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .hist-texts .src { font-size: var(--fs-13); }
+  .hist-texts .dst { font-size: var(--fs-13); color: var(--muted); }
+  .star-btn { color: var(--faint); }
+  .star-btn.faved { color: var(--warning); }
+  .star-btn.faved .ic use { fill: currentColor; }
+</style>
+</head>
+<body data-page="translate">
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="page">
+      <div class="page-head rise">
+        <div>
+          <h1><svg class="ic ic-20" viewBox="0 0 24 24"><use href="#i-translate"></use></svg>翻译</h1>
+          <p class="sub">中英文互译，使用设置中的默认服务，失败时自动回退。</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-outline" data-modal-open="hist-modal">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-history"></use></svg>翻译历史
+          </button>
+        </div>
+      </div>
+
+      <div class="translate-grid">
+        <div class="card pane rise">
+          <div class="spread" style="margin-bottom:10px">
+            <div class="seg" id="dir-seg">
+              <button class="on" data-dir="auto">自动检测</button>
+              <button data-dir="zh2en">中译英</button>
+              <button data-dir="en2zh">英译中</button>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-icon" id="swap-btn" title="交换原文与译文">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-swap"></use></svg>
+            </button>
+          </div>
+          <textarea class="textarea" id="src" placeholder="输入要翻译的内容，Ctrl + Enter 翻译">桌面工具箱把翻译、下载和定时任务放在一个托盘应用里。</textarea>
+          <div class="pane-foot">
+            <span class="hint grow" id="char-count">0 字符</span>
+            <button class="btn btn-ghost btn-sm btn-icon" id="speak-src" title="朗读原文">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-volume"></use></svg>
+            </button>
+            <button class="btn btn-ghost btn-sm" id="clear-src">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-x"></use></svg>清空
+            </button>
+            <button class="btn btn-primary" id="do-translate">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap"></use></svg>翻译
+            </button>
+          </div>
+        </div>
+
+        <div class="card pane rise" style="animation-delay:0.06s">
+          <div class="out-meta" id="out-meta" style="margin-bottom:10px;min-height:22px">
+            <span class="tag tag-primary" id="out-provider" hidden>微软翻译</span>
+            <span id="out-info"></span>
+          </div>
+          <div class="out-text" id="out">
+            <div class="empty" style="padding:24px">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-translate"></use></svg>
+              <b>译文将显示在这里</b><p>Ctrl + Enter 快速翻译</p>
+            </div>
+          </div>
+          <div class="pane-foot">
+            <span class="grow"></span>
+            <button class="btn btn-ghost btn-sm btn-icon" id="speak-out" title="朗读译文">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-volume"></use></svg>
+            </button>
+            <button class="btn btn-outline btn-sm" id="copy-out">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy"></use></svg>复制译文
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card rise" style="margin-top:16px;animation-delay:0.12s">
+        <div class="card-head">
+          <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-history"></use></svg>最近翻译<span class="count">· 5</span></h3>
+          <button class="btn btn-ghost btn-sm" data-modal-open="hist-modal">查看全部
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right"></use></svg></button>
+        </div>
+        <div id="recent-list"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-mask" id="hist-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>翻译历史</h3>
+      <button class="btn btn-ghost btn-sm btn-icon" data-modal-close><svg class="ic" viewBox="0 0 24 24"><use href="#i-x"></use></svg></button>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <input class="input grow" id="hist-search" placeholder="搜索原文或译文">
+      <select class="select" style="width:130px"><option>全部方向</option><option>中译英</option><option>英译中</option></select>
+      <label class="check"><input type="checkbox" id="hist-fav">仅收藏</label>
+    </div>
+    <div id="hist-list" style="max-height:46vh;overflow-y:auto"></div>
+    <div class="modal-foot">
+      <button class="btn btn-danger btn-sm" id="hist-clear">
+        <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash"></use></svg>清空历史
+      </button>
+      <span class="grow"></span>
+      <button class="btn btn-outline" data-modal-close>关闭</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/shell.js"></script>
+<script src="assets/pages/translate.js"></script>
+</body>
+</html>

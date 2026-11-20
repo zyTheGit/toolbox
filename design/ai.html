@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 工具 · Toolbox 界面优化设计稿</title>
+<link rel="stylesheet" href="assets/core.css">
+<link rel="stylesheet" href="assets/shell.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  .bench-grid { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+  @media (max-width: 1000px) { .bench-grid { grid-template-columns: minmax(0, 1fr); } }
+  .model-check { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .model-check + .model-check { margin-top: 8px; }
+  .model-check .name { font-size: var(--fs-13); font-weight: 500; }
+  .model-check .model { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--muted); }
+  .llm-card { border: 1px solid var(--border); border-radius: var(--r-sm); padding: 14px 16px; }
+  .llm-card + .llm-card { margin-top: 10px; }
+  .llm-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .llm-body { font-size: var(--fs-13); white-space: pre-wrap; word-break: break-word; }
+  .usage-bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--primary), var(--info)); }
+  .key-mask { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--muted); }
+</style>
+</head>
+<body data-page="ai">
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="page" data-tabs-scope>
+      <div class="page-head rise">
+        <div>
+          <h1><svg class="ic ic-20" viewBox="0 0 24 24"><use href="#i-sparkles"></use></svg>AI 工具<span class="beta-tag">实验</span></h1>
+          <p class="sub">多模型并行对比调试；凭据保存在本机，不会上传到任何服务器。</p>
+        </div>
+        <div class="actions">
+          <span class="pill pill-ok">AI 配置已保存</span>
+        </div>
+      </div>
+
+      <div class="seg-wrap rise">
+        <div class="seg" data-tabs="ai">
+          <button class="on" data-tab="bench"><svg class="ic" viewBox="0 0 24 24"><use href="#i-zap"></use></svg>LLM 调试台</button>
+          <button data-tab="keys"><svg class="ic" viewBox="0 0 24 24"><use href="#i-key"></use></svg>API Key 管理</button>
+        </div>
+      </div>
+
+      <!-- LLM 调试台 -->
+      <div data-panel="bench">
+        <div class="bench-grid">
+          <div class="card">
+            <h3 class="card-title" style="margin-bottom:12px"><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal"></use></svg>请求</h3>
+            <div class="stack">
+              <div class="field"><label>Prompt 模板</label>
+                <select class="select" id="tpl">
+                  <option>自定义</option><option>翻译</option><option>代码解释</option>
+                </select></div>
+              <div class="field"><label>System Prompt</label>
+                <textarea class="textarea" id="sys" style="min-height:56px">你是一个简洁的技术助手，回答控制在三句话以内。</textarea></div>
+              <div class="field"><label>Prompt</label>
+                <textarea class="textarea" id="prompt" style="min-height:88px">用一句话解释什么是 m3u8。</textarea></div>
+              <div class="form-grid">
+                <div class="field"><label>温度</label><input class="input" type="number" value="0.7" step="0.1" min="0" max="2"></div>
+                <div class="field"><label>最大 Token</label><input class="input" type="number" value="1024" step="128" min="1"></div>
+              </div>
+              <div class="field">
+                <label>发送到</label>
+                <label class="model-check"><input type="checkbox" class="send-to" data-provider="OpenAI" data-model="gpt-4o-mini" checked>
+                  <span class="grow"><span class="name">OpenAI</span><br><span class="model">gpt-4o-mini</span></span><span class="tag tag-primary">默认</span></label>
+                <label class="model-check"><input type="checkbox" class="send-to" data-provider="智谱 GLM" data-model="glm-4-flash" checked>
+                  <span class="grow"><span class="name">智谱 GLM</span><br><span class="model">glm-4-flash</span></span></label>
+                <label class="model-check"><input type="checkbox" class="send-to" data-provider="DeepSeek" data-model="deepseek-chat" checked>
+                  <span class="grow"><span class="name">DeepSeek</span><br><span class="model">deepseek-chat</span></span></label>
+              </div>
+              <div class="row">
+                <button class="btn btn-primary grow" id="send-llm">
+                  <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap"></use></svg>并行请求
+                </button>
+                <button class="btn btn-ghost" id="clear-llm">清空结果</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="stack" style="gap:16px">
+            <div class="card">
+              <div class="card-head">
+                <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles"></use></svg>对比结果</h3>
+                <span class="hint" id="llm-meta"></span>
+              </div>
+              <div id="llm-results">
+                <div class="empty">
+                  <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles"></use></svg>
+                  <b>还没有对比结果</b><p>选择模型后点击「并行请求」，结果将并排展示。</p>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-table"></use></svg>用量统计<span class="count">· 最近 7 天</span></h3>
+              </div>
+              <div class="table-wrap">
+                <table class="tbl">
+                  <thead><tr><th>模型</th><th>请求数</th><th>Token</th><th style="width:30%">占比</th></tr></thead>
+                  <tbody>
+                    <tr><td class="mono">gpt-4o-mini</td><td class="num">42</td><td class="num">38,204</td><td><div class="usage-bar" style="width:72%"></div></td></tr>
+                    <tr><td class="mono">glm-4-flash</td><td class="num">28</td><td class="num">21,570</td><td><div class="usage-bar" style="width:41%"></div></td></tr>
+                    <tr><td class="mono">deepseek-chat</td><td class="num">17</td><td class="num">15,932</td><td><div class="usage-bar" style="width:30%"></div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <details class="collapse">
+              <summary><svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right"></use></svg>模型配置与 Prompt 模板</summary>
+              <div class="collapse-body stack">
+                <div class="kv"><b>OpenAI</b><span class="mono">https://api.openai.com/v1 · gpt-4o-mini · 凭据「OpenAI 主密钥」</span></div>
+                <div class="kv"><b>智谱 GLM</b><span class="mono">https://open.bigmodel.cn/api/paas/v4 · glm-4-flash</span></div>
+                <div class="kv"><b>DeepSeek</b><span class="mono">https://api.deepseek.com/v1 · deepseek-chat</span></div>
+                <div class="kv"><b>内置模板</b><span>翻译（{{text}} → {{lang}}）、代码解释（{{code}}）</span></div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Key 管理 -->
+      <div data-panel="keys" hidden style="margin-top:16px">
+        <div class="card">
+          <div class="card-head">
+            <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-key"></use></svg>凭据列表<span class="count" id="key-count"></span></h3>
+            <button class="btn btn-primary btn-sm" data-modal-open="key-modal">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus"></use></svg>新增凭据
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead><tr><th>名称</th><th>服务</th><th>密钥</th><th>过期</th><th>备注</th><th style="text-align:right">操作</th></tr></thead>
+              <tbody id="key-body"></tbody>
+            </table>
+          </div>
+          <p class="hint" style="margin:12px 0 0">密钥仅保存在本机数据目录，列表中始终脱敏显示。</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-mask" id="key-modal">
+  <div class="modal" style="width:520px">
+    <div class="modal-head">
+      <h3>新增凭据</h3>
+      <button class="btn btn-ghost btn-sm btn-icon" data-modal-close><svg class="ic" viewBox="0 0 24 24"><use href="#i-x"></use></svg></button>
+    </div>
+    <div class="stack">
+      <div class="form-grid">
+        <div class="field"><label>名称</label><input class="input" id="nk-name" placeholder="例如：DeepSeek 备用"></div>
+        <div class="field"><label>所属服务</label>
+          <select class="select" id="nk-service"><option>OpenAI</option><option>DeepSeek</option><option>智谱 GLM</option><option>百度翻译</option><option>有道翻译</option><option>DeepL</option></select></div>
+      </div>
+      <div class="field"><label>密钥</label><input class="input mono" id="nk-secret" type="password" placeholder="sk-…"></div>
+      <div class="form-grid">
+        <div class="field"><label>过期日期（可选）</label><input class="input" id="nk-expire" type="date"></div>
+        <div class="field"><label>备注（可选）</label><input class="input" id="nk-note" placeholder="用途说明"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-modal-close>取消</button>
+      <button class="btn btn-primary" id="nk-create"><svg class="ic" viewBox="0 0 24 24"><use href="#i-check"></use></svg>保存凭据</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/shell.js"></script>
+<script src="assets/pages/ai.js"></script>
+</body>
+</html>

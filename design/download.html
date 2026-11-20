@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>下载 · Toolbox 界面优化设计稿</title>
+<link rel="stylesheet" href="assets/core.css">
+<link rel="stylesheet" href="assets/shell.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  .dl-card { border: 1px solid var(--border); border-radius: var(--r-sm); padding: 14px 16px; background: var(--surface); }
+  .dl-card + .dl-card { margin-top: 10px; }
+  .dl-url { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--text-2); }
+  .dl-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: var(--fs-12); color: var(--muted); }
+  .dl-progress { margin-top: 10px; }
+  .dl-stats { display: flex; gap: 14px; margin-top: 6px; font-size: var(--fs-12); color: var(--muted); }
+  .dl-stats b { color: var(--text-2); font-weight: 500; font-family: var(--font-mono); }
+  .dl-actions { display: flex; gap: 6px; flex: none; }
+  .group-label { display: flex; align-items: center; gap: 8px; font-size: var(--fs-12); font-weight: 600; color: var(--faint); margin: 16px 0 8px; letter-spacing: 0.04em; }
+  .group-label:first-child { margin-top: 0; }
+  .dl-log { margin-top: 10px; }
+  .input-group { display: flex; gap: 8px; }
+  .input-group .input { flex: 1; }
+</style>
+</head>
+<body data-page="download">
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="page">
+      <div class="page-head rise">
+        <div>
+          <h1><svg class="ic ic-20" viewBox="0 0 24 24"><use href="#i-download"></use></svg>下载</h1>
+          <p class="sub">调用 yt-dlp 下载视频、音频与字幕，支持 m3u8、YouTube、X、B 站链接或分享文本。</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-outline" id="open-dir">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-folder-open"></use></svg>打开下载目录
+          </button>
+        </div>
+      </div>
+
+      <div class="card rise">
+        <div class="card-head">
+          <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-plus"></use></svg>新建下载</h3>
+          <span class="hint" id="link-count">共 2 个有效链接</span>
+        </div>
+        <div class="stack">
+          <div class="field">
+            <label>视频链接（每行一个，支持批量）</label>
+            <textarea class="textarea" id="urls" style="min-height:72px">https://www.bilibili.com/video/BV1xx411c7mD
+https://example.com/live/playlist.m3u8</textarea>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label>保存目录</label>
+              <div class="input-group">
+                <input class="input" value="D:\Downloads\Toolbox">
+                <button class="btn btn-outline btn-icon" title="浏览目录"><svg class="ic" viewBox="0 0 24 24"><use href="#i-folder"></use></svg></button>
+              </div>
+            </div>
+            <div class="field">
+              <label>文件名（可选）</label>
+              <input class="input" placeholder="留空使用视频标题">
+            </div>
+            <div class="field">
+              <label>画质</label>
+              <select class="select" id="quality">
+                <option>最佳画质 MP4</option><option selected>1080p</option><option>720p</option><option>480p</option><option>仅音频 MP3</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>字幕</label>
+              <select class="select" id="subs">
+                <option>不下载字幕</option><option>中文（原字幕）</option><option selected>中英双语</option><option>英文</option>
+              </select>
+            </div>
+          </div>
+          <label class="check"><input type="checkbox">仅下载字幕（不下载视频）</label>
+          <details class="collapse">
+            <summary><svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right"></use></svg>高级选项</summary>
+            <div class="collapse-body form-grid">
+              <div class="field"><label>Referer</label><input class="input" placeholder="https://example.com"></div>
+              <div class="field"><label>Cookie 来源</label>
+                <select class="select"><option>不使用</option><option>Chrome</option><option>Edge</option><option>Firefox</option></select></div>
+              <div class="field"><label>代理</label><input class="input" placeholder="http://127.0.0.1:7890"></div>
+              <div class="field"><label>附加参数</label><input class="input mono" placeholder="--format bestvideo+bestaudio"></div>
+            </div>
+          </details>
+          <div class="spread">
+            <span class="hint">yt-dlp 与 ffmpeg 已就绪，下载失败会给出下一步建议。</span>
+            <button class="btn btn-primary" id="start-dl">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-download"></use></svg>开始下载
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card rise" style="margin-top:16px;animation-delay:0.08s">
+        <div class="card-head">
+          <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-list"></use></svg>下载队列<span class="count" id="queue-count"></span></h3>
+        </div>
+        <div class="group-label">进行中 · <span id="active-n">2</span></div>
+        <div id="active-list"></div>
+        <div class="group-label">历史 · <span id="history-n">2</span></div>
+        <div id="history-list"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="assets/shell.js"></script>
+<script src="assets/pages/download.js"></script>
+</body>
+</html>

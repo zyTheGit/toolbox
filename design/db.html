@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据库 · Toolbox 界面优化设计稿</title>
+<link rel="stylesheet" href="assets/core.css">
+<link rel="stylesheet" href="assets/shell.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  .db-layout { display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+  @media (max-width: 900px) { .db-layout { grid-template-columns: minmax(0, 1fr); } }
+  .tree { margin-top: 10px; max-height: 420px; overflow-y: auto; }
+  .tree-item { border-radius: 7px; }
+  .tree-head {
+    display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+    cursor: pointer; border-radius: 7px; font-size: var(--fs-13);
+  }
+  .tree-head:hover { background: var(--surface-soft); }
+  .tree-head .ic { width: 14px; height: 14px; color: var(--faint); transition: transform 0.15s ease; }
+  .tree-item.open > .tree-head .ic { transform: rotate(90deg); }
+  .tree-badge {
+    width: 18px; height: 18px; border-radius: 5px; flex: none;
+    font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--primary-soft); color: var(--primary);
+  }
+  .tree-badge.view { background: var(--info-soft); color: var(--info); }
+  .tree-cols { padding: 2px 0 6px 30px; display: none; }
+  .tree-item.open .tree-cols { display: block; }
+  .tree-col { display: flex; align-items: center; gap: 6px; font-size: var(--fs-12); color: var(--muted); padding: 2px 0; }
+  .tree-col .type { margin-left: auto; font-family: var(--font-mono); color: var(--faint); }
+  .tree-col .ic { width: 12px; height: 12px; color: var(--warning); }
+  .sql-editor { min-height: 96px; }
+  .result-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: var(--fs-12); color: var(--muted); }
+  .conn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .conn-row .input { flex: 1; min-width: 240px; }
+</style>
+</head>
+<body data-page="db">
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="page">
+      <div class="page-head rise">
+        <div>
+          <h1><svg class="ic ic-20" viewBox="0 0 24 24"><use href="#i-database"></use></svg>数据库浏览器<span class="beta-tag">实验</span></h1>
+          <p class="sub">只读浏览 SQLite / PostgreSQL / MySQL；MySQL / PostgreSQL 连接后可切换数据库。尚未在真实实例上验证。</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost" data-modal-open="recent-modal">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-history"></use></svg>最近连接
+          </button>
+        </div>
+      </div>
+
+      <div class="card rise">
+        <div class="conn-row">
+          <div class="seg" id="db-kind">
+            <button class="on">SQLite</button><button>PostgreSQL</button><button>MySQL</button>
+          </div>
+          <input class="input mono" id="db-dsn" value="C:\Users\hpee2\AppData\Roaming\Toolbox\toolbox.db">
+          <div class="row" id="db-picker" hidden style="gap:6px">
+            <span class="hint">数据库</span>
+            <select class="select" id="db-name" style="width:170px" disabled aria-label="切换数据库"></select>
+            <button class="btn btn-outline btn-icon" id="db-refresh" title="刷新数据库列表">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-refresh"></use></svg>
+            </button>
+          </div>
+          <button class="btn btn-outline" id="db-pick">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-folder"></use></svg>选择文件
+          </button>
+          <button class="btn btn-primary" id="db-connect">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap"></use></svg>连接
+          </button>
+        </div>
+        <p class="hint" style="margin:10px 0 0" id="conn-state">已连接 · SQLite 3.45 · 只读模式，不会写入任何数据。</p>
+      </div>
+
+      <div class="db-layout">
+        <div class="card rise" style="animation-delay:0.05s">
+          <div class="card-head" style="margin-bottom:8px">
+            <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-table"></use></svg>结构<span class="tag tag-primary" id="tree-db">toolbox.db</span></h3>
+            <span class="hint" id="tree-count">4 表 · 1 视图</span>
+          </div>
+          <input class="input" id="tree-search" placeholder="搜索表 / 字段" style="height:28px;font-size:13px">
+          <div class="tree" id="tree"></div>
+        </div>
+
+        <div class="stack" style="gap:16px">
+          <div class="card rise" style="animation-delay:0.1s">
+            <div class="card-head">
+              <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal"></use></svg>SQL 查询<span class="tag tag-primary" id="sql-kind">SQLite</span></h3>
+              <div class="row">
+                <span class="hint">行数</span>
+                <select class="select" id="page-size" style="width:80px;height:28px;font-size:13px">
+                  <option>50</option><option>100</option><option>200</option>
+                </select>
+              </div>
+            </div>
+            <textarea class="textarea mono sql-editor" id="sql">SELECT id, name, cron, enabled, last_status FROM tasks ORDER BY id;</textarea>
+            <div class="spread" style="margin-top:12px">
+              <span class="hint">Ctrl + Enter 执行 · 仅允许只读语句</span>
+              <button class="btn btn-primary btn-sm" id="run-sql">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-play"></use></svg>执行
+              </button>
+            </div>
+          </div>
+
+          <div class="card rise" style="animation-delay:0.15s">
+            <div class="card-head">
+              <h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-list"></use></svg>查询结果</h3>
+              <span class="hint" id="result-meta">第 1–5 行 · 共 12 行 · 0.42ms</span>
+            </div>
+            <div class="table-wrap">
+              <table class="tbl" id="result-table"></table>
+            </div>
+            <div class="result-foot">
+              <span>NULL 以灰色斜体显示 · 数字列等宽字体</span>
+              <div class="row">
+                <button class="btn btn-outline btn-sm btn-icon" id="page-prev" title="上一页"><svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-left"></use></svg></button>
+                <span id="page-label">1 / 3</span>
+                <button class="btn btn-outline btn-sm btn-icon" id="page-next" title="下一页"><svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right"></use></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-mask" id="recent-modal">
+  <div class="modal" style="width:480px">
+    <div class="modal-head">
+      <h3>最近连接</h3>
+      <button class="btn btn-ghost btn-sm btn-icon" data-modal-close><svg class="ic" viewBox="0 0 24 24"><use href="#i-x"></use></svg></button>
+    </div>
+    <div class="stack" id="recent-list"></div>
+    <div class="modal-foot"><button class="btn btn-outline" data-modal-close>关闭</button></div>
+  </div>
+</div>
+
+<script src="assets/shell.js"></script>
+<script src="assets/pages/db-seeds.js"></script>
+<script src="assets/pages/db.js"></script>
+</body>
+</html>

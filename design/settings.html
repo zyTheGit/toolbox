@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>设置 · Toolbox 界面优化设计稿</title>
+<link rel="stylesheet" href="assets/core.css">
+<link rel="stylesheet" href="assets/shell.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  .set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .set-row:last-child { border-bottom: 0; }
+  .set-row .lbl { font-size: var(--fs-13); font-weight: 500; }
+  .set-row .desc { font-size: var(--fs-12); color: var(--muted); margin-top: 1px; }
+  .set-row .ctl { flex: none; display: flex; align-items: center; gap: 8px; }
+  .set-row .ctl .input, .set-row .ctl .select { width: 220px; }
+  .tool-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .tool-row:last-child { border-bottom: 0; }
+  .tool-row .mono { color: var(--muted); }
+  @media (max-width: 760px) {
+    .set-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .set-row .ctl .input, .set-row .ctl .select { width: 100%; }
+    .set-row .ctl { width: 100%; }
+    .tool-row { flex-wrap: wrap; gap: 8px 12px; }
+    .tool-row .lbl { flex: none; }
+  }
+</style>
+</head>
+<body data-page="settings">
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="page" id="settings-page">
+      <div class="page-head rise">
+        <div>
+          <h1><svg class="ic ic-20" viewBox="0 0 24 24"><use href="#i-settings"></use></svg>设置</h1>
+          <p class="sub">下载、翻译、启动与命令执行。</p>
+        </div>
+      </div>
+
+      <div class="card rise">
+        <div class="card-head"><h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-download"></use></svg>下载</h3></div>
+        <div class="set-row">
+          <div><div class="lbl">保存目录</div><div class="desc">下载产物的默认保存位置</div></div>
+          <div class="ctl">
+            <input class="input" value="D:\Downloads\Toolbox">
+            <button class="btn btn-outline btn-icon" title="浏览"><svg class="ic" viewBox="0 0 24 24"><use href="#i-folder"></use></svg></button>
+            <button class="btn btn-ghost btn-icon" title="打开目录"><svg class="ic" viewBox="0 0 24 24"><use href="#i-folder-open"></use></svg></button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">同时下载数</div><div class="desc">超出数量的任务自动排队</div></div>
+          <div class="ctl"><select class="select"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">分片线程数</div><div class="desc">m3u8 分片并发下载线程</div></div>
+          <div class="ctl"><select class="select"><option>4</option><option selected>8</option><option>12</option><option>16</option></select></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">全局代理</div><div class="desc">留空不使用代理</div></div>
+          <div class="ctl"><input class="input mono" placeholder="http://127.0.0.1:7890"></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">工具下载镜像</div><div class="desc">yt-dlp / ffmpeg 的下载来源</div></div>
+          <div class="ctl"><select class="select"><option selected>GitHub 官方</option><option>国内镜像</option></select></div>
+        </div>
+        <div style="margin-top:12px">
+          <div class="tool-row">
+            <span class="lbl grow">yt-dlp</span>
+            <span class="mono">2025.10.01</span>
+            <span class="pill pill-ok">就绪</span>
+            <button class="btn btn-outline btn-sm" id="upd-ytdlp"><svg class="ic" viewBox="0 0 24 24"><use href="#i-refresh"></use></svg>检查更新</button>
+          </div>
+          <div class="tool-row" id="ffmpeg-row">
+            <span class="lbl grow">ffmpeg</span>
+            <span class="mono" id="ffmpeg-ver">—</span>
+            <span class="pill pill-err" id="ffmpeg-pill">缺失</span>
+            <button class="btn btn-primary btn-sm" id="install-ffmpeg"><svg class="ic" viewBox="0 0 24 24"><use href="#i-download"></use></svg>一键下载</button>
+          </div>
+          <div class="progress thin" id="ffmpeg-progress" hidden style="margin-top:8px"><i style="width:0%"></i></div>
+          <p class="hint" style="margin:8px 0 0">工具按需下载到数据目录 bin/，安装前进行 SHA256 校验，校验失败自动终止。</p>
+        </div>
+        <details class="collapse" style="margin-top:12px">
+          <summary><svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right"></use></svg>自定义工具路径</summary>
+          <div class="collapse-body form-grid">
+            <div class="field"><label>yt-dlp 路径</label><input class="input mono" placeholder="留空使用数据目录 bin/"></div>
+            <div class="field"><label>ffmpeg 路径</label><input class="input mono" placeholder="留空使用数据目录 bin/"></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card rise">
+        <div class="card-head"><h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-translate"></use></svg>翻译</h3></div>
+        <div class="set-row">
+          <div><div class="lbl">默认服务</div><div class="desc">翻译页优先使用的服务商</div></div>
+          <div class="ctl"><select class="select"><option selected>微软翻译（免费）</option><option>Google</option><option>OpenAI</option><option>DeepL</option><option>百度翻译</option><option>有道翻译</option></select></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">失败自动回退</div><div class="desc">主服务失败时按顺序尝试其他服务</div></div>
+          <div class="ctl"><label class="check"><input type="checkbox" checked>启用</label></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">朗读倍率</div><div class="desc">译文与原文朗读速度</div></div>
+          <div class="ctl"><select class="select"><option>0.5x</option><option selected>1.0x</option><option>1.5x</option><option>2.0x</option></select></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">保存翻译历史</div><div class="desc">关闭后不再记录新的翻译</div></div>
+          <div class="ctl">
+            <label class="switch"><input type="checkbox" checked><i></i></label>
+            <span class="hint">最多保留</span><input class="input" type="number" value="200" style="width:90px">
+          </div>
+        </div>
+        <details class="collapse" style="margin-top:12px">
+          <summary><svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right"></use></svg>各服务参数与 Key</summary>
+          <div class="collapse-body stack">
+            <div class="set-row"><div class="lbl grow">百度翻译 APP ID / 密钥</div>
+              <div class="ctl"><span class="key-mask mono">2024…b8e1</span><span class="tag tag-primary">已保存</span>
+                <button class="btn btn-ghost btn-sm">清除</button></div></div>
+            <div class="set-row"><div class="lbl grow">DeepL API Key</div>
+              <div class="ctl"><span class="hint">未配置</span><button class="btn btn-outline btn-sm">配置</button></div></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card rise">
+        <div class="card-head"><h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-power"></use></svg>启动与后台</h3></div>
+        <div class="set-row">
+          <div><div class="lbl">开机自启</div><div class="desc">登录系统后自动启动 Toolbox</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" checked><i></i></label></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">仅驻留托盘</div><div class="desc">启动时不弹出主窗口</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox"><i></i></label></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">启动延迟</div><div class="desc">避免与开机高峰争抢资源</div></div>
+          <div class="ctl"><select class="select"><option selected>不延迟</option><option>10 秒</option><option>30 秒</option><option>60 秒</option></select></div>
+        </div>
+      </div>
+
+      <div class="card rise">
+        <div class="card-head"><h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal"></use></svg>命令执行</h3></div>
+        <div class="set-row">
+          <div><div class="lbl">允许运行终端任务</div><div class="desc">默认关闭；开启后定时任务可执行本机命令，不提权、不监听端口</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="cmd-switch"><i></i></label></div>
+        </div>
+        <div class="alert alert-warn" id="cmd-warn" style="margin-top:12px">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-alert"></use></svg>
+          命令执行已关闭，终端类定时任务将被跳过。开启前请确认任务内容可信。
+        </div>
+      </div>
+
+      <div class="card rise">
+        <div class="card-head"><h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-bell"></use></svg>通知与快捷翻译</h3></div>
+        <div class="set-row">
+          <div><div class="lbl">下载完成通知</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" checked><i></i></label></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">任务结果通知</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" checked><i></i></label></div>
+        </div>
+        <div class="set-row">
+          <div><div class="lbl">全局快捷翻译</div><div class="desc">选中文字后按快捷键直接翻译</div></div>
+          <div class="ctl">
+            <label class="switch"><input type="checkbox" checked><i></i></label>
+            <input class="input mono" value="Ctrl + Alt + T" style="width:150px">
+          </div>
+        </div>
+      </div>
+
+      <div class="card rise">
+        <div class="card-head"><h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-save"></use></svg>备份与恢复</h3></div>
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn btn-outline" id="export-backup"><svg class="ic" viewBox="0 0 24 24"><use href="#i-download"></use></svg>导出备份</button>
+          <button class="btn btn-outline" id="import-backup"><svg class="ic" viewBox="0 0 24 24"><use href="#i-upload"></use></svg>从备份恢复</button>
+          <label class="check"><input type="checkbox">包含终端任务命令</label>
+        </div>
+        <p class="hint" style="margin:10px 0 0">恢复备份后需要重启应用生效。</p>
+      </div>
+
+      <div class="card rise">
+        <div class="card-head"><h3 class="card-title"><svg class="ic" viewBox="0 0 24 24"><use href="#i-info"></use></svg>关于</h3></div>
+        <div class="stack" style="gap:8px">
+          <div class="kv"><b>版本</b><span>v0.3.0</span></div>
+          <div class="kv"><b>数据目录</b><span class="mono">C:\Users\hpee2\AppData\Roaming\Toolbox</span></div>
+        </div>
+      </div>
+
+      <div class="save-bar" id="save-bar">
+        <span class="state" id="save-state"></span>
+        <div class="row">
+          <button class="btn btn-ghost" id="discard">放弃修改</button>
+          <button class="btn btn-primary" id="save"><svg class="ic" viewBox="0 0 24 24"><use href="#i-check"></use></svg>保存设置</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="assets/shell.js"></script>
+<script src="assets/pages/settings.js"></script>
+</body>
+</html>

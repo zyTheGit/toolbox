@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>定时任务 · Toolbox 界面优化设计稿</title>
+<link rel="stylesheet" href="assets/core.css">
+<link rel="stylesheet" href="assets/shell.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  .task-row { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .task-row:first-child { padding-top: 4px; }
+  .task-row:last-child { border-bottom: 0; padding-bottom: 4px; }
+  .task-main { flex: 1; min-width: 0; }
+  .task-name { display: flex; align-items: center; gap: 8px; font-size: var(--fs-14); font-weight: 600; flex-wrap: wrap; }
+  .task-sched { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: var(--fs-12); color: var(--muted); flex-wrap: wrap; }
+  .cron-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--primary-soft); color: var(--primary);
+    border-radius: 6px; padding: 1px 8px; font-size: var(--fs-12); font-weight: 500;
+  }
+  .cron-chip .ic { width: 12px; height: 12px; }
+  .task-last { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: var(--fs-12); color: var(--muted); flex-wrap: wrap; }
+  .task-side { display: flex; align-items: center; gap: 6px; flex: none; padding-top: 2px; }
+  .task-err {
+    color: var(--danger); font-family: var(--font-mono); font-size: var(--fs-12);
+    flex-basis: 100%; min-width: 0; white-space: pre-wrap; word-break: break-all;
+  }
+  .filter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  @media (max-width: 760px) { .task-row { flex-direction: column; } .task-side { padding-top: 0; } }
+</style>
+</head>
+<body data-page="tasks">
+<div class="app-shell">
+  <aside id="sidebar"></aside>
+  <main class="main">
+    <div class="page">
+      <div class="page-head rise">
+        <div>
+          <h1><svg class="ic ic-20" viewBox="0 0 24 24"><use href="#i-clock"></use></svg>定时任务</h1>
+          <p class="sub">按每天 / 每周等规则重复执行，或指定年月日时分秒只执行一次。</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-outline" id="pause-all">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-pause"></use></svg>全部暂停
+          </button>
+          <button class="btn btn-primary" data-modal-open="task-modal">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus"></use></svg>新建任务
+          </button>
+        </div>
+      </div>
+
+      <div class="filter-row rise">
+        <button class="chip on" data-filter="all">全部 <span id="n-all"></span></button>
+        <button class="chip" data-filter="on">已启用 <span id="n-on"></span></button>
+        <button class="chip" data-filter="off">已停用 <span id="n-off"></span></button>
+      </div>
+
+      <div class="card rise" style="animation-delay:0.06s">
+        <div id="task-list"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-mask" id="task-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>新建任务</h3>
+      <button class="btn btn-ghost btn-sm btn-icon" data-modal-close><svg class="ic" viewBox="0 0 24 24"><use href="#i-x"></use></svg></button>
+    </div>
+    <div class="stack">
+      <div class="form-grid">
+        <div class="field"><label>任务名称</label><input class="input" id="nt-name" placeholder="例如：每日站会提醒"></div>
+        <div class="field"><label>类型</label>
+          <select class="select" id="nt-type"><option>提醒</option><option>终端</option></select></div>
+      </div>
+      <div class="field">
+        <label>触发方式</label>
+        <div class="seg" id="nt-mode">
+          <button class="on" data-mode="repeat">重复执行</button>
+          <button data-mode="once">仅一次</button>
+        </div>
+      </div>
+      <div class="form-grid" id="nt-repeat-fields">
+        <div class="field"><label>重复方式</label>
+          <select class="select" id="nt-repeat"><option>每天</option><option>每周</option><option>每月</option><option>每小时</option><option>自定义 cron</option></select></div>
+        <div class="field"><label>时间</label><input class="input" id="nt-time" value="09:00" placeholder="HH:mm"></div>
+        <div class="span-2 hint" id="nt-preview">含义：每天 09:00 执行 · 接下来：明天 09:00、后天 09:00</div>
+      </div>
+      <div class="field" id="nt-once-field" hidden>
+        <label>执行时间</label><input class="input" type="datetime-local" id="nt-once">
+      </div>
+      <div class="field"><label>提醒内容</label>
+        <textarea class="textarea" id="nt-body" style="min-height:64px" placeholder="到点后通过系统通知提醒的内容">准备每日站会：同步昨日进展与今日计划。</textarea></div>
+      <label class="check"><input type="checkbox" id="nt-enabled" checked>创建后立即启用</label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-modal-close>取消</button>
+      <button class="btn btn-primary" id="nt-create">
+        <svg class="ic" viewBox="0 0 24 24"><use href="#i-check"></use></svg>创建任务
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="runs-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="runs-title">运行记录</h3>
+      <button class="btn btn-ghost btn-sm btn-icon" data-modal-close><svg class="ic" viewBox="0 0 24 24"><use href="#i-x"></use></svg></button>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>触发</th><th>状态</th><th>开始时间</th><th>耗时</th><th>退出码</th></tr></thead>
+        <tbody id="runs-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" data-modal-close>关闭</button></div>
+  </div>
+</div>
+
+<script src="assets/shell.js"></script>
+<script src="assets/pages/tasks.js"></script>
+</body>
+</html>
