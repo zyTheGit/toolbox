@@ -171,7 +171,9 @@ pub fn run() {
             commands::db::db_history_list,
             commands::db::db_history_reveal,
             commands::db::db_history_rename,
-            commands::db::db_pick_sqlite
+            commands::db::db_pick_sqlite,
+            commands::update::check_for_update,
+            commands::update::open_release_page
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

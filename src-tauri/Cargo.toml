@@ -40,6 +40,7 @@ rfd = "0.18"
 md-5 = "0.10"
 sha2 = "0.10"
 croner = "4"
+semver = "1"
 percent-encoding = "2"
 parking_lot = "0.12"
 rusqlite = { version = "0.32", features = ["bundled", "hooks"] }

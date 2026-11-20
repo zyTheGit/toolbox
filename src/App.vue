@@ -106,6 +106,7 @@ import {
 } from "naive-ui";
 import { connectEvents, loadSnapshot, store } from "./store";
 import { events } from "./api";
+import { runUpdateCheck } from "./composables/useUpdateCheck";
 import { themeOverrides } from "./ui/theme";
 import type { IconName } from "./ui/icons";
 import AppIcon from "./components/AppIcon.vue";
@@ -242,6 +243,8 @@ watch(page, () => {
 onMounted(async () => {
   await attachEvents();
   await loadSnapshot();
+  // 启动时静默检查一次新版本；失败不打扰用户，设置页可见错误并可重试。
+  void runUpdateCheck();
 });
 
 onBeforeUnmount(() => {

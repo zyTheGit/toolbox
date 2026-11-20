@@ -4,6 +4,7 @@ pub mod db;
 pub mod download;
 pub mod secrets;
 pub mod task;
+pub mod update;
 
 use std::path::PathBuf;
 

@@ -31,6 +31,7 @@ import type {
   TranslateRequest,
   TranslateResult,
 } from "./types";
+import type { UpdateCheck } from "./types/update";
 import type { NavTarget } from "./types/nav";
 
 export const api = {
@@ -79,6 +80,8 @@ export const api = {
     invoke<string>("data_export", { includeCommands }),
   dataImport: () => invoke<ImportOutcome>("data_import"),
   restartApp: () => invoke<void>("restart_app"),
+  checkForUpdate: () => invoke<UpdateCheck>("check_for_update"),
+  openReleasePage: (url: string) => invoke<void>("open_release_page", { url }),
   secretsList: () => invoke<SecretEntryView[]>("secrets_list"),
   secretSave: (input: SecretEntryInput) =>
     invoke<SecretEntryView[]>("secret_save", { input }),
