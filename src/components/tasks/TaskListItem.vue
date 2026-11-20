@@ -92,6 +92,20 @@
           size="small"
           quaternary
           :disabled="busy"
+          title="复制任务"
+          aria-label="复制任务"
+          @click="emit('clone')"
+        >
+          <template #icon>
+            <AppIcon name="copy" :size="16" />
+          </template>
+        </n-button>
+
+        <n-button
+          class="icon-btn"
+          size="small"
+          quaternary
+          :disabled="busy"
           title="运行记录"
           aria-label="运行记录"
           @click="emit('runs')"
@@ -145,6 +159,7 @@ const emit = defineEmits<{
   (e: "run"): void;
   (e: "cancel"): void;
   (e: "edit"): void;
+  (e: "clone"): void;
   (e: "delete"): void;
   (e: "runs"): void;
 }>();

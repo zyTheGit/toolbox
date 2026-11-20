@@ -60,6 +60,8 @@ import { useTaskForm } from "./useTaskForm";
 const props = defineProps<{
   show: boolean;
   task: Task | null;
+  /** 复制来源：新建表单预填该任务的内容 */
+  template?: Task | null;
   allowCommands: boolean;
 }>();
 
@@ -86,8 +88,11 @@ const {
   onShowChange,
 } = useTaskForm(props, emit);
 
-const title = computed(() => (isEdit.value ? "编辑任务" : "新建任务"));
-const saveLabel = computed(() => (isEdit.value ? "保存修改" : "创建任务"));
+const isClone = computed(() => !props.task && Boolean(props.template));
+const title = computed(() => (isEdit.value ? "编辑任务" : isClone.value ? "复制任务" : "新建任务"));
+const saveLabel = computed(() =>
+  isEdit.value ? "保存修改" : isClone.value ? "创建副本" : "创建任务",
+);
 </script>
 
 <style scoped>

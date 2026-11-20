@@ -77,6 +77,7 @@
           @run="handleRun(task)"
           @cancel="handleCancel(task)"
           @edit="openEdit(task)"
+          @clone="openClone(task)"
           @delete="handleDelete(task)"
           @runs="openRuns(task)"
         />
@@ -86,6 +87,7 @@
     <TaskFormModal
       v-model:show="formShow"
       :task="editing"
+      :template="cloning"
       :allow-commands="allowCommands"
       @saved="syncTasks"
     />
@@ -129,6 +131,7 @@ const visibleTasks = computed(() =>
 
 const formShow = ref(false);
 const editing = ref<Task | null>(null);
+const cloning = ref<Task | null>(null);
 const runsShow = ref(false);
 const runsTask = ref<Task | null>(null);
 const runsDrawer = ref<InstanceType<typeof TaskRunsDrawer> | null>(null);
@@ -179,12 +182,21 @@ async function togglePaused(): Promise<void> {
 
 function openCreate(): void {
   editing.value = null;
+  cloning.value = null;
   formShow.value = true;
 }
 
 function openEdit(task: Task): void {
   if (task.running) return;
   editing.value = task;
+  cloning.value = null;
+  formShow.value = true;
+}
+
+/** 复制任务：打开新建表单并预填源任务，保存时生成一条独立任务 */
+function openClone(task: Task): void {
+  editing.value = null;
+  cloning.value = task;
   formShow.value = true;
 }
 

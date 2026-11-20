@@ -6,6 +6,7 @@ import { api } from "../../api";
 import { store } from "../../store";
 import type { ScheduleKind, Task, TaskInput, TaskPayload, TaskType } from "../../types";
 import { emptyPayload, errorText } from "./task-utils";
+import { copyTaskName } from "../../utils/taskName";
 import { enableCommandsWithConflict } from "../../utils/securityConfig";
 import { cronSummary } from "../../utils/cron";
 import {
@@ -29,6 +30,7 @@ export interface TaskFormState {
 interface TaskFormProps {
   show: boolean;
   task: Task | null;
+  template?: Task | null;
   allowCommands: boolean;
 }
 
@@ -131,13 +133,15 @@ export function useTaskForm(props: TaskFormProps, emit: TaskFormEmits) {
   function init(): void {
     submitSeq += 1;
     const task = props.task;
-    form.name = task?.name ?? "";
-    form.type = task?.type ?? "command";
-    form.schedule = task?.schedule ?? "cron";
-    form.cron = task?.cron || "0 17 * * *";
-    form.runAt = task?.runAt || defaultRunAt();
-    form.enabled = task?.enabled ?? true;
-    form.payload = { ...emptyPayload(), ...(task?.payload ?? {}) };
+    const template = task ? null : props.template ?? null;
+    const source = task ?? template;
+    form.name = task ? task.name : template ? copyTaskName(template.name) : "";
+    form.type = source?.type ?? "command";
+    form.schedule = source?.schedule ?? "cron";
+    form.cron = source?.cron || "0 17 * * *";
+    form.runAt = source?.runAt || defaultRunAt();
+    form.enabled = source?.enabled ?? true;
+    form.payload = { ...emptyPayload(), ...(source?.payload ?? {}) };
     Object.assign(repeat, defaultRepeatState());
     applyCronToRepeat(repeat, form.cron);
     ensureShell();
