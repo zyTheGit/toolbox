@@ -52,6 +52,7 @@
           <n-select
             class="repeat-weekdays"
             multiple
+            max-tag-count="responsive"
             :value="repeat.weekdays"
             :options="weekdayOptions"
             placeholder="选择星期"
@@ -283,7 +284,8 @@ function onRunAtChange(value: string | null): void {
 .repeat-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  /* 多选星期选中多个标签后控件会变高，顶部对齐避免与相邻输入框错位 */
+  align-items: flex-start;
   gap: 10px;
   width: 100%;
 }
@@ -306,6 +308,7 @@ function onRunAtChange(value: string | null): void {
 .repeat-label {
   font-size: 13px;
   color: var(--text-2);
+  line-height: var(--h-ctl);
 }
 
 .repeat-num {
@@ -336,6 +339,8 @@ function onRunAtChange(value: string | null): void {
   flex-direction: column;
   gap: 4px;
   width: 100%;
+  /* 预留「含义 + 接下来」两行高度，避免校验结果返回时弹窗高度跳动 */
+  min-height: 45px;
 }
 
 .cron-meaning {

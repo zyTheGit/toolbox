@@ -3,7 +3,12 @@
     :show="show"
     preset="card"
     :title="title"
-    :style="{ width: '640px', maxWidth: 'calc(100vw - 48px)' }"
+    :style="{
+      width: '640px',
+      maxWidth: 'calc(100vw - 48px)',
+      marginTop: '8vh',
+      alignSelf: 'flex-start',
+    }"
     :mask-closable="false"
     :bordered="false"
     @update:show="onShowChange"
