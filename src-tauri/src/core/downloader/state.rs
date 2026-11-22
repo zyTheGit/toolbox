@@ -8,7 +8,7 @@ use crate::state::push_warning;
 
 use super::args::redact_text;
 use super::credentials::{strip_job, JobCredentials};
-use super::naming::now_string;
+use super::naming::{finalize_media_ext, now_string};
 use super::parse::{
     has_subtitle_ext, looks_chinese, parse_file, parse_progress, scan_output_file,
     scan_subtitle_file,
@@ -96,11 +96,15 @@ impl Downloader {
             job.clone()
         };
 
-        if snapshot.status == "completed" && snapshot.file.trim().is_empty() {
-            snapshot.file = scan_output_file(&snapshot);
-            if snapshot.file.is_empty() {
-                snapshot.file = scan_subtitle_file(&snapshot);
+        if snapshot.status == "completed" {
+            if snapshot.file.trim().is_empty() {
+                snapshot.file = scan_output_file(&snapshot);
+                if snapshot.file.is_empty() {
+                    snapshot.file = scan_subtitle_file(&snapshot);
+                }
             }
+            // 未知扩展名（直链常见 .unknown_video）按文件头补正，保证系统能打开。
+            snapshot.file = finalize_media_ext(&snapshot.file);
             let mut inner = self.inner.lock();
             if let Some(job) = inner.jobs.iter_mut().find(|item| item.id == id) {
                 job.file = snapshot.file.clone();

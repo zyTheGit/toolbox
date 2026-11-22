@@ -1,12 +1,13 @@
-use std::path::Path;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 
 use crate::models::{AppConfig, Job};
 
 pub(super) const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
-pub(super) const MEDIA_EXTS: [&str; 14] = [
+pub(super) const MEDIA_EXTS: [&str; 15] = [
     "mp4", "mkv", "webm", "ts", "m4v", "mov", "flv", "avi", "mp3", "m4a", "aac", "opus", "ogg",
-    "wav",
+    "wav", "flac",
 ];
 
 pub(super) fn now_string() -> String {
@@ -160,4 +161,107 @@ fn is_reserved_name(name: &str) -> bool {
 
 pub(super) fn escape_template(name: &str) -> String {
     name.replace('%', "%%")
+}
+
+/// 直链路径不带扩展名时，yt-dlp 的 generic 提取器会把产物写成
+/// `.unknown_video` / `.unknown_audio`，Windows 播放器因此无法关联打开。
+/// 下载完成后按文件头实际容器补正扩展名；无法识别时保持原样。
+pub(super) fn finalize_media_ext(file: &str) -> String {
+    if file.trim().is_empty() {
+        return file.to_string();
+    }
+    let path = Path::new(file);
+    if has_media_ext(path) {
+        return file.to_string();
+    }
+    let Some(ext) = sniff_media_ext(path) else {
+        return file.to_string();
+    };
+    let target = unique_path(path.with_extension(ext));
+    match std::fs::rename(path, &target) {
+        Ok(()) => target.to_string_lossy().to_string(),
+        Err(_) => file.to_string(),
+    }
+}
+
+fn has_media_ext(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .map(|ext| MEDIA_EXTS.iter().any(|item| ext.eq_ignore_ascii_case(item)))
+        .unwrap_or(false)
+}
+
+fn unique_path(path: PathBuf) -> PathBuf {
+    if !path.exists() {
+        return path;
+    }
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("video");
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("mp4");
+    for index in 1..1000 {
+        let candidate = path.with_file_name(format!("{stem} ({index}).{ext}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    path
+}
+
+fn sniff_media_ext(path: &Path) -> Option<&'static str> {
+    let mut head = [0u8; 1024];
+    let mut file = std::fs::File::open(path).ok()?;
+    let read = file.read(&mut head).ok()?;
+    sniff_magic(&head[..read])
+}
+
+pub(super) fn sniff_magic(head: &[u8]) -> Option<&'static str> {
+    if head.len() < 12 {
+        return None;
+    }
+    let at = |range: std::ops::Range<usize>| head.get(range);
+    if at(4..8) == Some(b"ftyp") {
+        return Some(match at(8..12) {
+            Some(b"M4A ") | Some(b"M4B ") => "m4a",
+            _ => "mp4",
+        });
+    }
+    // 部分 MP4 变体从 moov/mdat/wide 开始。
+    if matches!(at(4..8), Some(b"moov") | Some(b"mdat") | Some(b"wide")) {
+        return Some("mp4");
+    }
+    if head.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+        let is_webm = head.windows(4).any(|item| item == b"webm");
+        return Some(if is_webm { "webm" } else { "mkv" });
+    }
+    if head.starts_with(b"FLV") {
+        return Some("flv");
+    }
+    if head.starts_with(b"RIFF") && at(8..12) == Some(b"AVI ") {
+        return Some("avi");
+    }
+    if head.starts_with(b"RIFF") && at(8..12) == Some(b"WAVE") {
+        return Some("wav");
+    }
+    if head.starts_with(b"OggS") {
+        return Some("ogg");
+    }
+    if head.starts_with(b"fLaC") {
+        return Some("flac");
+    }
+    if head.starts_with(b"ID3") {
+        return Some("mp3");
+    }
+    if head[0] == 0xFF && (head[1] & 0xE0) == 0xE0 {
+        return Some("mp3");
+    }
+    // MPEG-TS：0x47 同步字节每 188 字节出现一次。
+    if at(0..377).is_some() && head[0] == 0x47 && head[188] == 0x47 && head[376] == 0x47 {
+        return Some("ts");
+    }
+    None
 }

@@ -285,6 +285,65 @@ fn resolves_effective_threads() {
     assert_eq!(effective_threads(&job, &config), 1);
 }
 
+#[test]
+fn sniffs_container_from_file_header() {
+    let mut mp4 = vec![0u8; 32];
+    mp4[4..8].copy_from_slice(b"ftyp");
+    mp4[8..12].copy_from_slice(b"isom");
+    assert_eq!(sniff_magic(&mp4), Some("mp4"));
+
+    let mut m4a = vec![0u8; 32];
+    m4a[4..8].copy_from_slice(b"ftyp");
+    m4a[8..12].copy_from_slice(b"M4A ");
+    assert_eq!(sniff_magic(&m4a), Some("m4a"));
+
+    let webm = b"\x1A\x45\xDF\xA3\x9F\x42\x86\x81\x01\x42\x82\x84webm";
+    assert_eq!(sniff_magic(webm), Some("webm"));
+    let mkv = b"\x1A\x45\xDF\xA3\x9F\x42\x86\x81\x01\x42\x82\x88matroska";
+    assert_eq!(sniff_magic(mkv), Some("mkv"));
+
+    assert_eq!(
+        sniff_magic(b"FLV\x01\x05\x00\x00\x00\x00\x09\x00\x00\x00\x00"),
+        Some("flv")
+    );
+    assert_eq!(
+        sniff_magic(b"RIFF\x00\x00\x00\x00WAVEfmt "),
+        Some("wav")
+    );
+    assert_eq!(sniff_magic(&[0xFF, 0xFB, 0x90, 0x00, 0, 0, 0, 0, 0, 0, 0, 0]), Some("mp3"));
+
+    let mut ts = vec![0u8; 377];
+    ts[0] = 0x47;
+    ts[188] = 0x47;
+    ts[376] = 0x47;
+    assert_eq!(sniff_magic(&ts), Some("ts"));
+
+    // 字幕等文本文件不做重命名。
+    assert_eq!(sniff_magic(b"1\r\n00:00:01,000 --> 00:00:02,000"), None);
+    assert_eq!(sniff_magic(b"short"), None);
+}
+
+#[test]
+fn finalizes_unknown_video_extension() {
+    let dir = std::env::temp_dir().join(format!("toolbox-finalize-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("clip [id].unknown_video");
+    let mut head = vec![0u8; 32];
+    head[4..8].copy_from_slice(b"ftyp");
+    head[8..12].copy_from_slice(b"isom");
+    std::fs::write(&src, &head).unwrap();
+
+    let out = finalize_media_ext(&src.to_string_lossy());
+    assert!(out.ends_with("clip [id].mp4"), "{out}");
+    assert!(std::path::Path::new(&out).exists());
+    assert!(!src.exists());
+
+    // 已知扩展名原样返回，不触碰文件。
+    assert_eq!(finalize_media_ext("C:\\out\\a.mp4"), "C:\\out\\a.mp4");
+    assert_eq!(finalize_media_ext(""), "");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 /// 备份恢复后的重载入口：磁盘上的记录必须可读回，且不得自动恢复下载。
 #[test]
 fn reload_reads_restored_jobs_from_disk() {
