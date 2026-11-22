@@ -12,8 +12,8 @@ mod translate;
 pub use backup::ImportOutcome;
 pub use config::{
     AppConfig, BaiduConfig, ConfigConflictError, ConfigSaveError, DeepLConfig, HistoryConfig,
-    NotifyConfig, OpenAiConfig, QuickTranslateConfig, SecurityConfig, StartupConfig, ToolPaths,
-    TranslateConfig, YoudaoConfig, CONFIG_SCHEMA_VERSION,
+    NotifyConfig, OpenAiConfig, QuickTranslateConfig, SecurityConfig, ShortcutsConfig,
+    StartupConfig, ToolPaths, TranslateConfig, YoudaoConfig, CONFIG_SCHEMA_VERSION,
 };
 pub use db::{
     DbColumn, DbDatabase, DbHistoryEntryView, DbOpenInput, DbQueryResult, DbSchema, DbSessionInfo,

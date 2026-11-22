@@ -30,15 +30,15 @@
       class="src-textarea"
       :value="input"
       :disabled="loading"
-      placeholder="输入要翻译的内容，Ctrl + Enter 翻译"
+      :placeholder="`输入要翻译的内容，${submitLabel} 翻译`"
       aria-label="要翻译的原文"
       @input="onInput"
-      @keydown.ctrl.enter.prevent="emit('translate')"
+      @keydown="onKeydown"
     ></textarea>
 
     <div class="pane-foot">
       <span class="hint foot-hint">
-        {{ input.length }} 字符<template v-if="!loading"> · Ctrl + Enter 翻译</template>
+        {{ input.length }} 字符<template v-if="!loading"> · {{ submitLabel }} 翻译</template>
         <n-button
           v-if="undoAvailable"
           text
@@ -81,8 +81,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { NButton } from "naive-ui";
 import AppIcon from "../AppIcon.vue";
+import { useShortcuts } from "../../composables/useShortcuts";
 
 defineProps<{
   input: string;
@@ -108,8 +110,17 @@ const DIRECTION_OPTIONS = [
   { label: "英译中", value: "en2zh" },
 ];
 
+const { label, matches } = useShortcuts();
+const submitLabel = computed(() => label("translateSubmit"));
+
 function onInput(event: Event): void {
   emit("update:input", (event.target as HTMLTextAreaElement).value);
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!matches(event, "translateSubmit")) return;
+  event.preventDefault();
+  emit("translate");
 }
 </script>
 

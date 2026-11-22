@@ -41,7 +41,7 @@
             </nav>
           </aside>
 
-          <main class="main">
+          <main class="main" ref="mainEl">
             <div v-if="!store.ready" class="boot">
               <n-spin size="large" />
               <p>正在加载…</p>
@@ -93,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   NAlert,
   NButton,
@@ -121,6 +121,7 @@ import SettingsView from "./views/SettingsView.vue";
 type PageKey = "translate" | "download" | "tasks" | "dev" | "db" | "ai" | "settings";
 
 const page = ref<PageKey>("translate");
+const mainEl = ref<HTMLElement | null>(null);
 
 // 静态导入视图并按页面缓存：桌面端资源在本地，切换零等待，避免异步分包首切白屏
 const views = {
@@ -200,6 +201,17 @@ async function attachEvents(): Promise<void> {
     unlisteners.push(off);
   } catch {
     // Navigation is a convenience; the event banner already covers a broken bridge.
+  }
+  try {
+    const off = await events.onQuickTranslate(async () => {
+      page.value = "translate";
+      await nextTick();
+      // 翻译页与其他页面共用滚动容器，从设置页触发时需回到顶部才能看到输入框。
+      if (mainEl.value) mainEl.value.scrollTop = 0;
+    });
+    unlisteners.push(off);
+  } catch {
+    // 快捷翻译失联时同样由顶部事件提示条兜底。
   }
 }
 

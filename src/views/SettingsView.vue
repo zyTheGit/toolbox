@@ -20,6 +20,7 @@
       />
       <AutostartCard :startup="draft.startup" />
       <CommandCard :draft="draft" />
+      <ShortcutsCard :draft="draft" />
       <NotifyCard :draft="draft" />
       <BackupPanel />
       <AboutCard :version="versionLabel" :platform="platformLabel" :data-dir="dataDir" />
@@ -44,6 +45,7 @@ import DownloadCard from "../components/settings/DownloadCard.vue";
 import TranslateCard from "../components/settings/TranslateCard.vue";
 import AutostartCard from "../components/settings/AutostartCard.vue";
 import CommandCard from "../components/settings/CommandCard.vue";
+import ShortcutsCard from "../components/settings/ShortcutsCard.vue";
 import NotifyCard from "../components/settings/NotifyCard.vue";
 import BackupPanel from "../components/settings/BackupPanel.vue";
 import AboutCard from "../components/settings/AboutCard.vue";
@@ -80,6 +82,7 @@ function emptyConfig(): AppConfig {
     security: { allowCommands: false },
     notify: { download: true, task: true },
     quickTranslate: { enabled: false, shortcut: "CommandOrControl+Shift+T" },
+    shortcuts: { translateSubmit: "CommandOrControl+Enter", dbRun: "CommandOrControl+Enter" },
     llm: defaultLlmConfig(),
   };
 }

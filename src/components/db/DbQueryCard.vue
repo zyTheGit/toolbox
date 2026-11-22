@@ -26,11 +26,10 @@
       placeholder="SELECT * FROM ..."
       spellcheck="false"
       @update:value="emit('update:sql', $event)"
-      @keydown.ctrl.enter.prevent="emit('run')"
-      @keydown.meta.enter.prevent="emit('run')"
+      @keydown="onKeydown"
     />
     <div class="spread query-foot">
-      <span class="hint">Ctrl + Enter 执行 · 仅允许只读语句</span>
+      <span class="hint">{{ runLabel }} 执行 · 仅允许只读语句</span>
       <n-button
         type="primary"
         size="small"
@@ -48,9 +47,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { NButton, NInput, NSelect } from "naive-ui";
 import AppIcon from "../AppIcon.vue";
 import { dbKindLabel } from "./sqlText";
+import { useShortcuts } from "../../composables/useShortcuts";
 import type { DbKind } from "../../types";
 
 const props = defineProps<{
@@ -73,6 +74,15 @@ const LIMIT_OPTIONS = [50, 100, 200, 500].map((value) => ({
 
 function onLimit(value: string | number | null): void {
   if (typeof value === "number" && value !== props.limit) emit("update:limit", value);
+}
+
+const { label, matches } = useShortcuts();
+const runLabel = computed(() => label("dbRun"));
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!matches(event, "dbRun")) return;
+  event.preventDefault();
+  emit("run");
 }
 </script>
 

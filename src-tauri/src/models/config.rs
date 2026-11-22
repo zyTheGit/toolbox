@@ -160,6 +160,22 @@ impl Default for QuickTranslateConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortcutsConfig {
+    pub translate_submit: String,
+    pub db_run: String,
+}
+
+impl Default for ShortcutsConfig {
+    fn default() -> Self {
+        Self {
+            translate_submit: "CommandOrControl+Enter".into(),
+            db_run: "CommandOrControl+Enter".into(),
+        }
+    }
+}
+
 pub const CONFIG_SCHEMA_VERSION: u32 = 1;
 
 fn default_schema_version() -> u32 {
@@ -187,6 +203,8 @@ pub struct AppConfig {
     pub notify: NotifyConfig,
     #[serde(default)]
     pub quick_translate: QuickTranslateConfig,
+    #[serde(default)]
+    pub shortcuts: ShortcutsConfig,
     #[serde(default)]
     pub llm: LlmConfig,
 }

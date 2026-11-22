@@ -92,7 +92,11 @@ pub async fn save_config(
     core::config::validate(&merged)?;
 
     let previous = state.config();
-    core::quick::apply(&app, &merged)?;
+    // 新快捷键注册失败时旧快捷键已被注销，必须立即恢复，避免保存失败后快捷翻译不可用。
+    if let Err(err) = core::quick::apply(&app, &merged) {
+        let _ = core::quick::apply(&app, &previous);
+        return Err(err.into());
+    }
 
     let stored = (|| -> Result<(), String> {
         // Keys embedded in the payload (older UI) move into the secret store.

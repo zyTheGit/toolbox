@@ -1,9 +1,8 @@
 {
   "limit": 400,
-  "updatedAt": "2026-11-20",
+  "updatedAt": "2026-11-22",
   "note": "存量超限文件基线，只允许变小；新增超限文件直接失败。由 scripts/check-file-length.mjs --update 生成。",
   "files": {
-    "src-tauri/src/core/secrets.rs": 500,
-    "src/types.ts": 428
+    "src-tauri/src/core/secrets.rs": 500
   }
 }

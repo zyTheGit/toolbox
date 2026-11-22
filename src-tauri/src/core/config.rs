@@ -104,6 +104,15 @@ pub fn normalize(config: &mut AppConfig, paths: &AppPaths) {
     }
     config.translate.tts_rate = config.translate.tts_rate.clamp(0.5, 2.0);
     config.quick_translate.shortcut = config.quick_translate.shortcut.trim().to_string();
+    let shortcut_defaults = crate::models::ShortcutsConfig::default();
+    config.shortcuts.translate_submit = config.shortcuts.translate_submit.trim().to_string();
+    config.shortcuts.db_run = config.shortcuts.db_run.trim().to_string();
+    if config.shortcuts.translate_submit.is_empty() {
+        config.shortcuts.translate_submit = shortcut_defaults.translate_submit;
+    }
+    if config.shortcuts.db_run.is_empty() {
+        config.shortcuts.db_run = shortcut_defaults.db_run;
+    }
     for provider in &mut config.llm.providers {
         provider.id = provider.id.trim().to_string();
         provider.name = provider.name.trim().to_string();
@@ -144,7 +153,7 @@ pub fn validate(config: &AppConfig) -> Result<(), String> {
         return Err("[PARAM] 历史保留条数至少为 1".into());
     }
     if config.quick_translate.enabled && config.quick_translate.shortcut.is_empty() {
-        return Err("[PARAM] 启用快捷翻译时需要填写快捷键".into());
+        return Err("[HOTKEY] 启用快捷翻译时需要填写快捷键".into());
     }
     let mut provider_ids = std::collections::HashSet::new();
     for provider in &config.llm.providers {
@@ -242,6 +251,7 @@ mod tests {
         object.remove("schemaVersion");
         object.remove("notify");
         object.remove("quickTranslate");
+        object.remove("shortcuts");
 
         let mut config: AppConfig = serde_json::from_value(value).unwrap();
         normalize(&mut config, &test_paths());
@@ -251,6 +261,18 @@ mod tests {
         assert!(config.notify.task);
         assert!(!config.quick_translate.enabled);
         assert!(!config.quick_translate.shortcut.is_empty());
+        assert_eq!(config.shortcuts.translate_submit, "CommandOrControl+Enter");
+        assert_eq!(config.shortcuts.db_run, "CommandOrControl+Enter");
+    }
+
+    #[test]
+    fn blank_page_shortcuts_fall_back_to_defaults() {
+        let mut config = AppConfig::default();
+        config.shortcuts.translate_submit = "  ".into();
+        config.shortcuts.db_run = "".into();
+        normalize(&mut config, &test_paths());
+        assert_eq!(config.shortcuts.translate_submit, "CommandOrControl+Enter");
+        assert_eq!(config.shortcuts.db_run, "CommandOrControl+Enter");
     }
 
     #[test]

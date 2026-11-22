@@ -20,10 +20,10 @@ pub fn apply(app: &AppHandle, config: &AppConfig) -> Result<(), String> {
 
     let text = config.quick_translate.shortcut.trim();
     if text.is_empty() {
-        return Err("[PARAM] 启用快捷翻译时需要填写快捷键".into());
+        return Err("[HOTKEY] 启用快捷翻译时需要填写快捷键".into());
     }
     let shortcut =
-        Shortcut::from_str(text).map_err(|err| format!("[PARAM] 快捷键格式无效：{err}"))?;
+        Shortcut::from_str(text).map_err(|err| format!("[HOTKEY] 快捷键格式无效：{err}"))?;
     let handle = app.clone();
     manager
         .on_shortcut(shortcut, move |_app, _shortcut, event| {
@@ -44,5 +44,5 @@ pub fn apply(app: &AppHandle, config: &AppConfig) -> Result<(), String> {
             }
             let _ = handle.emit("quick-translate", preview);
         })
-        .map_err(|err| format!("[CONFLICT] 注册快捷键失败（可能被其他程序占用）：{err}"))
+        .map_err(|err| format!("[HOTKEY] 快捷键注册失败（可能已被其他程序占用）：{err}"))
 }

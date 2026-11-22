@@ -25,7 +25,7 @@
       <EmptyState
         icon="translate"
         title="译文将显示在这里"
-        description="输入内容后按 Ctrl + Enter 翻译。"
+        :description="`输入内容后按 ${submitLabel} 翻译。`"
       />
     </div>
 
@@ -53,10 +53,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { NAlert, NButton, NSpin } from "naive-ui";
 import type { TranslateResult } from "../../types";
 import AppIcon from "../AppIcon.vue";
 import EmptyState from "../EmptyState.vue";
+import { useShortcuts } from "../../composables/useShortcuts";
 
 defineProps<{
   result: TranslateResult | null;
@@ -67,6 +69,9 @@ defineProps<{
   footHint: string;
   speaking: boolean;
 }>();
+
+const { label } = useShortcuts();
+const submitLabel = computed(() => label("translateSubmit"));
 
 const emit = defineEmits<{
   (e: "close-error"): void;

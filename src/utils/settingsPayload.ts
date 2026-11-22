@@ -1,4 +1,5 @@
 import type { AppConfig, ProviderId } from "../types";
+import { DEFAULT_SHORTCUTS } from "./shortcut";
 
 const PROVIDER_ORDER: ProviderId[] = ["microsoft", "google", "openai", "deepl", "baidu", "youdao"];
 
@@ -22,5 +23,11 @@ export function normalizeSettingsDraft(draft: AppConfig): AppConfig {
   payload.startup.delaySeconds = Number.isFinite(delay) ? delay : 0;
   const ttsRate = Number(payload.translate.ttsRate);
   payload.translate.ttsRate = Number.isFinite(ttsRate) ? Math.min(2, Math.max(0.5, ttsRate)) : 1;
+  if (!payload.shortcuts.translateSubmit.trim()) {
+    payload.shortcuts.translateSubmit = DEFAULT_SHORTCUTS.translateSubmit;
+  }
+  if (!payload.shortcuts.dbRun.trim()) {
+    payload.shortcuts.dbRun = DEFAULT_SHORTCUTS.dbRun;
+  }
   return payload;
 }

@@ -6,7 +6,8 @@ export type ErrorCode =
   | "TIMEOUT"
   | "PARAM"
   | "DATA"
-  | "CONFLICT";
+  | "CONFLICT"
+  | "HOTKEY";
 
 export interface AppError {
   code: ErrorCode | "";
@@ -23,6 +24,7 @@ const ACTIONS: Record<ErrorCode, string> = {
   PARAM: "检查参数后重试",
   DATA: "到「设置 → 备份」恢复数据",
   CONFLICT: "刷新后重试",
+  HOTKEY: "换一个组合键，或先关闭快捷翻译",
 };
 
 const PATTERN = /^\[([A-Z_]+)\]\s*/;
