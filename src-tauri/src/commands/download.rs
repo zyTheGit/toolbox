@@ -33,8 +33,20 @@ pub fn job_retry(
     state.downloader.retry(&id, request)
 }
 
+/// 重新下载：清空该任务的临时分片后重新入队。
 #[tauri::command]
-pub fn job_remove(id: String, state: tauri::State<'_, AppState>) -> CmdResult<()> {
+pub fn job_redownload(
+    id: String,
+    request: Option<JobRetryRequest>,
+    state: tauri::State<'_, AppState>,
+) -> CmdResult<Job> {
+    state.ensure_writable()?;
+    state.downloader.redownload(&id, request)
+}
+
+/// 移除记录，返回清理掉的临时文件数量。
+#[tauri::command]
+pub fn job_remove(id: String, state: tauri::State<'_, AppState>) -> CmdResult<usize> {
     state.ensure_writable()?;
     state.downloader.remove(&id)
 }

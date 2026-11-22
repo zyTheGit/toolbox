@@ -62,7 +62,9 @@ export const api = {
   jobCancel: (id: string) => invoke<void>("job_cancel", { id }),
   jobRetry: (id: string, request?: JobRetryRequest | null) =>
     invoke<Job>("job_retry", { id, request: request ?? null }),
-  jobRemove: (id: string) => invoke<void>("job_remove", { id }),
+  jobRedownload: (id: string, request?: JobRetryRequest | null) =>
+    invoke<Job>("job_redownload", { id, request: request ?? null }),
+  jobRemove: (id: string) => invoke<number>("job_remove", { id }),
   jobOpen: (id: string) => invoke<string>("job_open", { id }),
   tasksList: () => invoke<Task[]>("tasks_list"),
   taskCreate: (input: TaskInput) => invoke<Task>("task_create", { input }),

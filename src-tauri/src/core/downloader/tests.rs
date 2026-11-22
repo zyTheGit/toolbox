@@ -175,7 +175,7 @@ fn restart_marks_active_jobs_interrupted_and_keeps_parameters() {
     assert!(mark_interrupted(&mut job, "2026-01-01 00:00:00"));
     assert_eq!(job.status, "interrupted");
     assert_eq!(job.finished_at, "2026-01-01 00:00:00");
-    assert!(job.error.contains("可重试"));
+    assert!(job.error.contains("可继续"));
     assert!(job.progress.speed.is_empty());
     assert_eq!(job.name, "视频");
     assert_eq!(job.quality, "720");

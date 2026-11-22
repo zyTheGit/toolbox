@@ -13,6 +13,7 @@ use crate::models::{AppConfig, DownloadRequest, Job};
 use crate::state::{push_warning, AppPaths, SharedConfig, Warnings};
 
 mod args;
+mod cleanup;
 mod credentials;
 mod naming;
 mod parse;
@@ -27,6 +28,8 @@ use self::naming::{job_name, normalize_subtitles, now_string, sanitize_file_name
 use self::state::{is_active, mark_interrupted};
 use crate::core::proc::kill_tree;
 
+#[cfg(test)]
+mod cleanup_tests;
 #[cfg(test)]
 mod credentials_tests;
 #[cfg(test)]
@@ -278,8 +281,9 @@ impl Downloader {
         Ok(())
     }
 
-    pub fn remove(&self, id: &str) -> Result<(), String> {
-        {
+    /// 移除记录并清理该任务的未完成临时文件，返回删除的文件数。
+    pub fn remove(&self, id: &str) -> Result<usize, String> {
+        let snapshot = {
             let mut inner = self.inner.lock();
             let Some(index) = inner.jobs.iter().position(|item| item.id == id) else {
                 return Err("[CONFLICT] 任务不存在".into());
@@ -287,13 +291,14 @@ impl Downloader {
             if is_active(&inner.jobs[index]) {
                 return Err("[CONFLICT] 请先取消任务".into());
             }
-            inner.jobs.remove(index);
+            let job = inner.jobs.remove(index);
             // 记录被移除后，内存凭据同步清理，避免残留。
             inner.credentials.remove(id);
-        }
+            job
+        };
         self.emit_removed(id);
         self.save();
-        Ok(())
+        Ok(self.cleanup_temps_for(&snapshot))
     }
 
     pub fn open(&self, id: &str) -> Result<String, String> {

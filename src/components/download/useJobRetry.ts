@@ -54,9 +54,26 @@ export function useJobRetry(job: () => Job, notify: Notifier) {
     }
   }
 
+  /** 重新下载：清空断点后从零开始；凭据缺失时走同一重填流程。 */
+  async function redownload(): Promise<void> {
+    if (busy.value) return;
+    busy.value = true;
+    try {
+      await api.jobRedownload(job().id);
+      notify.success("已清空断点并重新开始下载");
+    } catch (err) {
+      if (isCredentialsError(err)) {
+        openCredentials();
+      } else {
+        notify.error(errorText(err));
+      }
+    } finally {
+      busy.value = false;
+    }
+  }
+
   /** 在对话框中补填凭据后重试。 */
-  async function submitCredentials(draft: CredentialDraft): Promise<void> {
-    if (submitting.value) return;
+  async function submitCredentials(draft: CredentialDraft): Promise<void> {    if (submitting.value) return;
     submitting.value = true;
     error.value = "";
     const request: JobRetryRequest = {
@@ -89,6 +106,7 @@ export function useJobRetry(job: () => Job, notify: Notifier) {
     error,
     initial,
     retry,
+    redownload,
     submitCredentials,
   };
 }

@@ -139,6 +139,7 @@ pub fn run() {
             commands::download::download_enqueue,
             commands::download::job_cancel,
             commands::download::job_retry,
+            commands::download::job_redownload,
             commands::download::job_remove,
             commands::download::job_open,
             commands::task::tasks_list,

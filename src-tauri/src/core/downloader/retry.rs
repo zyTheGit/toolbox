@@ -65,7 +65,7 @@ impl Downloader {
 
             job.status = "queued".into();
             job.error.clear();
-            job.file.clear();
+            // 保留成品路径：续传与清理临时文件都按它推导前缀。
             job.progress = JobProgress::default();
             job.log.clear();
             job.started_at.clear();
@@ -76,5 +76,21 @@ impl Downloader {
         self.save();
         self.ensure_worker();
         Ok(job)
+    }
+
+    /// 重新下载：先清空该任务的临时分片，再从零开始。
+    pub fn redownload(
+        &self,
+        id: &str,
+        request: Option<JobRetryRequest>,
+    ) -> Result<Job, String> {
+        let job = self
+            .job_snapshot(id)
+            .ok_or_else(|| "[CONFLICT] 任务不存在".to_string())?;
+        if is_active(&job) {
+            return Err("[CONFLICT] 任务正在排队或运行，无需重新下载".into());
+        }
+        self.cleanup_temps_for(&job);
+        self.retry(id, request)
     }
 }

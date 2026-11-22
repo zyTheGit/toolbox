@@ -272,7 +272,7 @@ pub(super) fn mark_interrupted(job: &mut Job, stamp: &str) -> bool {
         return false;
     }
     job.status = "interrupted".into();
-    job.error = "应用退出，任务已中断，可重试".into();
+    job.error = "应用退出，任务已中断，可继续".into();
     job.finished_at = stamp.to_string();
     job.progress.speed.clear();
     job.progress.eta.clear();

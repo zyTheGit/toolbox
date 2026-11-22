@@ -32,8 +32,24 @@
           @click="retry"
         >
           <template #icon><AppIcon name="refresh" :size="16" /></template>
-          重试
+          {{ retryLabel }}
         </n-button>
+        <n-dropdown
+          v-if="canRetry"
+          trigger="click"
+          :options="moreOptions"
+          @select="onMoreSelect"
+        >
+          <n-button
+            size="small"
+            quaternary
+            title="更多操作"
+            aria-label="更多操作"
+            :disabled="busy"
+          >
+            <template #icon><AppIcon name="dots" :size="16" /></template>
+          </n-button>
+        </n-dropdown>
         <n-button
           v-if="canOpenDir"
           size="small"
@@ -100,7 +116,7 @@
 
     <div v-if="needsCredentials" class="alert alert-warn job-alert">
       <AppIcon name="key" :size="16" />
-      <span>该任务使用了代理 / Cookie / Referer 等凭据。凭据只保存在内存中，重启后重试需要重新填写。</span>
+      <span>该任务使用了代理 / Cookie / Referer 等凭据。凭据只保存在内存中，重启后继续或重试需要重新填写。</span>
     </div>
 
     <JobLog v-if="showLog" :job="job" />
@@ -118,14 +134,12 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { NButton, useDialog, useMessage } from "naive-ui";
+import { NButton, NDropdown, useMessage, type DropdownOption } from "naive-ui";
 import AppIcon from "../AppIcon.vue";
 import StatusPill from "../StatusPill.vue";
 import JobLog from "./JobLog.vue";
 import RetryCredentialsModal from "./RetryCredentialsModal.vue";
-import { api } from "../../api";
 import type { Job } from "../../types";
-import { describeError } from "../../utils/errors";
 import {
   formatJobTime,
   isActiveJob,
@@ -136,14 +150,12 @@ import {
   jobSubtitle,
 } from "./jobDisplay";
 import { useJobRetry } from "./useJobRetry";
+import { useJobActions } from "./useJobActions";
 
 const props = defineProps<{ job: Job }>();
 
 const message = useMessage();
-const dialog = useDialog();
 const showLog = ref(false);
-/** 当前进行中的本地操作，用于按钮 loading 与防重复。 */
-const action = ref<"" | "cancel" | "open" | "remove">("");
 
 const {
   busy: retryBusy,
@@ -152,6 +164,7 @@ const {
   error: retryError,
   initial: retryInitial,
   retry,
+  redownload,
   submitCredentials,
 } = useJobRetry(
   () => props.job,
@@ -161,7 +174,23 @@ const {
   },
 );
 
-const busy = computed(() => Boolean(action.value) || retryBusy.value);
+const { action, busy, cancel, openDir, remove, requestRedownload } = useJobActions(
+  () => props.job,
+  () => retryBusy.value,
+  redownload,
+);
+
+/** 中断任务用"继续"更贴合语义；失败与取消仍是"重试"。 */
+const retryLabel = computed(() =>
+  props.job.status === "interrupted" ? "继续" : "重试",
+);
+const moreOptions: DropdownOption[] = [
+  { label: "重新下载（清空断点）", key: "redownload" },
+];
+
+function onMoreSelect(key: string | number): void {
+  if (key === "redownload") requestRedownload();
+}
 
 const isActive = computed(() => isActiveJob(props.job));
 const isTerminal = computed(() => !isActive.value);
@@ -194,54 +223,6 @@ const timeText = computed(() => {
   return formatJobTime(props.job.finishedAt || props.job.createdAt);
 });
 const failure = computed(() => jobFailure(props.job));
-
-async function cancel(): Promise<void> {
-  if (busy.value) return;
-  action.value = "cancel";
-  try {
-    await api.jobCancel(props.job.id);
-    message.success("已请求取消");
-  } catch (err) {
-    message.error(describeError(err));
-  } finally {
-    action.value = "";
-  }
-}
-
-async function openDir(): Promise<void> {
-  if (busy.value) return;
-  action.value = "open";
-  try {
-    const path = await api.jobOpen(props.job.id);
-    message.success(`已打开 ${path}`);
-  } catch (err) {
-    message.error(describeError(err));
-  } finally {
-    action.value = "";
-  }
-}
-
-function remove(): void {
-  if (busy.value) return;
-  dialog.warning({
-    title: "移除记录",
-    content: "确定移除这条下载记录？已下载的文件不会被删除。",
-    positiveText: "移除",
-    negativeText: "取消",
-    onPositiveClick: async () => {
-      if (busy.value) return;
-      action.value = "remove";
-      try {
-        await api.jobRemove(props.job.id);
-        message.success("已移除记录");
-      } catch (err) {
-        message.error(describeError(err));
-      } finally {
-        action.value = "";
-      }
-    },
-  });
-}
 </script>
 
 <style scoped>
