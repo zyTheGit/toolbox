@@ -57,6 +57,16 @@ optimize: 优化大数据查询性能
 ## 代码约定
 
 - 前端通过 `src/api.ts` 调用 Tauri command，不直接访问后端内部状态。
+
+## Agent skills
+
+### Issue tracker
+
+工单以 GitHub Issues 形式管理，通过 `gh` CLI 读写。详见 `docs/agents/issue-tracker.md`。
+
+### Domain docs
+
+单上下文布局：根目录 `GLOSSARY.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
 <!-- BEGIN AGENTHUB -->
 # AgentHub Managed Rules (toolbox)
 
