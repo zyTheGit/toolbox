@@ -31,9 +31,12 @@ pub(super) fn temp_stem(job: &Job) -> Option<String> {
 }
 
 fn file_stem(value: &str) -> Option<String> {
-    let name = Path::new(value.trim())
-        .file_name()?
-        .to_string_lossy()
+    // 记录可能来自另一平台（备份恢复、跨平台共享），两种分隔符都要切。
+    let name = value
+        .trim()
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
         .to_string();
     if name.is_empty() {
         return None;
