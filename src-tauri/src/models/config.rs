@@ -128,11 +128,34 @@ pub struct SecurityConfig {
     pub allow_commands: bool,
 }
 
+/// 下载事件的细分开关；总开关仍是 `NotifyConfig::download`。
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NotifyEvents {
+    pub success: bool,
+    pub failed: bool,
+    pub all_done: bool,
+}
+
+impl Default for NotifyEvents {
+    fn default() -> Self {
+        Self {
+            success: true,
+            failed: true,
+            all_done: false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct NotifyConfig {
     pub download: bool,
     pub task: bool,
+    #[serde(default)]
+    pub events: NotifyEvents,
+    #[serde(default)]
+    pub sound: bool,
 }
 
 impl Default for NotifyConfig {
@@ -140,6 +163,8 @@ impl Default for NotifyConfig {
         Self {
             download: true,
             task: true,
+            events: NotifyEvents::default(),
+            sound: false,
         }
     }
 }

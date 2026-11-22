@@ -64,3 +64,10 @@ export interface DownloadRequest {
 export interface JobRetryRequest {
   referer?: string; cookiesBrowser?: string; proxy?: string; extraArgs?: string; quality?: string; threads?: number;
 }
+
+/** 下载事件的应用内提示；系统通知由后端在窗口隐藏时单独发送。 */
+export interface DownloadToast {
+  kind: "completed" | "failed" | "all-done";
+  title: string;
+  text: string;
+}

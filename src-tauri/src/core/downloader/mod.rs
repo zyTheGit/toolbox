@@ -8,7 +8,6 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::core::config::expand_home;
-use crate::core::persist;
 use crate::models::{AppConfig, DownloadRequest, Job};
 use crate::state::{push_warning, AppPaths, SharedConfig, Warnings};
 
@@ -19,15 +18,19 @@ mod naming;
 mod parse;
 mod retry;
 mod state;
+mod toast;
 mod worker;
 
 pub(crate) use self::args::redact_text;
 use self::args::validate_extra_args;
 use self::credentials::{adopt_loaded_jobs, strip_job, JobCredentials};
 use self::naming::{job_name, normalize_subtitles, now_string, sanitize_file_name};
-use self::state::{is_active, mark_interrupted};
+use self::state::{begin_batch_if_idle, is_active, mark_interrupted, read_jobs};
+use self::state::Finish;
 use crate::core::proc::kill_tree;
 
+#[cfg(test)]
+mod batch_tests;
 #[cfg(test)]
 mod cleanup_tests;
 #[cfg(test)]
@@ -45,6 +48,10 @@ struct Inner {
     children: HashMap<String, u32>,
     last_emit: HashMap<String, Instant>,
     shutdown: bool,
+    /// 本轮下载批次：队列由空闲变繁忙时开启，全部结束后汇总一次。
+    batch_open: bool,
+    batch_success: usize,
+    batch_failed: usize,
 }
 
 #[derive(Clone)]
@@ -55,12 +62,6 @@ pub struct Downloader {
     warnings: Warnings,
     inner: Arc<Mutex<Inner>>,
     save_order: Arc<Mutex<()>>,
-}
-
-enum Finish {
-    Completed,
-    Canceled,
-    Failed(String),
 }
 
 impl Downloader {
@@ -202,6 +203,7 @@ impl Downloader {
 
         let created = {
             let mut inner = self.inner.lock();
+            begin_batch_if_idle(&mut inner);
             let mut created = Vec::new();
             for (index, url) in urls.into_iter().enumerate() {
                 let name = job_name(base_name.as_deref(), index, total);
@@ -357,6 +359,9 @@ impl Downloader {
         inner.last_emit.clear();
         inner.running = false;
         inner.shutdown = keep_stopped;
+        inner.batch_open = false;
+        inner.batch_success = 0;
+        inner.batch_failed = 0;
         Ok(())
     }
 
@@ -390,11 +395,4 @@ impl Downloader {
         }
         self.save();
     }
-}
-
-/// 读取下载记录文件；`Ok(None)` 表示文件尚不存在。
-///
-/// 启动初始化与备份恢复后的重载共用这一入口，避免两套加载逻辑。
-fn read_jobs(path: &Path) -> Result<Option<Vec<Job>>, String> {
-    persist::load_json::<Vec<Job>>(path)
 }

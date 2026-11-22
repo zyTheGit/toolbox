@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use tauri::Emitter;
@@ -13,7 +14,15 @@ use super::parse::{
     has_subtitle_ext, looks_chinese, parse_file, parse_progress, scan_output_file,
     scan_subtitle_file,
 };
-use super::{Downloader, Finish, Inner};
+use super::toast::{emit_toast, failure_hint, job_label};
+use super::{Downloader, Inner};
+
+/// 后台任务的终态；与取消标记分开，便于 finish_job 统一收口。
+pub(super) enum Finish {
+    Completed,
+    Canceled,
+    Failed(String),
+}
 
 const MAX_LOG_LINES: usize = 400;
 const KEEP_TERMINAL: usize = 100;
@@ -56,44 +65,52 @@ impl Downloader {
     }
 
     pub(super) fn finish_job(&self, id: &str, outcome: Finish) {
-        let mut snapshot = {
+        let (mut snapshot, summary) = {
             let mut inner = self.inner.lock();
-            let Inner {
-                jobs,
-                cancel_ids,
-                children,
-                last_emit,
-                ..
-            } = &mut *inner;
-            children.remove(id);
-            cancel_ids.remove(id);
-            last_emit.remove(id);
+            let snapshot = {
+                let Inner {
+                    jobs,
+                    cancel_ids,
+                    children,
+                    last_emit,
+                    batch_success,
+                    batch_failed,
+                    ..
+                } = &mut *inner;
+                children.remove(id);
+                cancel_ids.remove(id);
+                last_emit.remove(id);
 
-            let Some(job) = jobs.iter_mut().find(|item| item.id == id) else {
-                return;
+                let Some(job) = jobs.iter_mut().find(|item| item.id == id) else {
+                    return;
+                };
+                if job.status != "running" {
+                    return;
+                }
+
+                match outcome {
+                    Finish::Completed => {
+                        job.status = "completed".into();
+                        job.progress.percent = 100.0;
+                        job.progress.speed.clear();
+                        job.progress.eta.clear();
+                        *batch_success += 1;
+                    }
+                    Finish::Canceled => {
+                        job.status = "canceled".into();
+                        job.error = "已取消".into();
+                    }
+                    Finish::Failed(message) => {
+                        job.status = "failed".into();
+                        job.error = message;
+                        *batch_failed += 1;
+                    }
+                }
+                job.finished_at = now_string();
+                job.clone()
             };
-            if job.status != "running" {
-                return;
-            }
-
-            match outcome {
-                Finish::Completed => {
-                    job.status = "completed".into();
-                    job.progress.percent = 100.0;
-                    job.progress.speed.clear();
-                    job.progress.eta.clear();
-                }
-                Finish::Canceled => {
-                    job.status = "canceled".into();
-                    job.error = "已取消".into();
-                }
-                Finish::Failed(message) => {
-                    job.status = "failed".into();
-                    job.error = message;
-                }
-            }
-            job.finished_at = now_string();
-            job.clone()
+            // 本批最后一个任务结束：取出汇总并复位计数，供“全部完成”提醒使用。
+            (snapshot, batch_summary(&mut inner))
         };
 
         if snapshot.status == "completed" {
@@ -132,41 +149,55 @@ impl Downloader {
 
         self.emit_job(&snapshot);
         self.save();
+        self.notify_finished(&snapshot, summary);
+    }
 
-        let notify_enabled = self.config.read().notify.download;
-        if notify_enabled && matches!(snapshot.status.as_str(), "completed" | "failed") {
-            let label = if snapshot.name.trim().is_empty() {
-                std::path::Path::new(&snapshot.file)
-                    .file_name()
-                    .map(|value| value.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "m3u8 任务".to_string())
-            } else {
-                snapshot.name.trim().to_string()
-            };
-            let label: String = label.chars().take(60).collect();
-            let label = if label.is_empty() {
-                "m3u8 任务".to_string()
-            } else {
-                label
-            };
-            if snapshot.status == "completed" {
-                if let Some(app) = &self.app {
-                    crate::core::notify::notify(app, "download", None, "下载完成", &label);
-                }
-            } else if let Some(app) = &self.app {
-                crate::core::notify::notify(
-                    app,
-                    "download",
-                    None,
-                    "下载失败",
-                    &format!("{label}：点击查看原因"),
-                );
+    /// 下载事件提醒：应用内提示始终发送，系统通知仅在主窗口隐藏时由 notify() 放行。
+    fn notify_finished(&self, job: &Job, summary: Option<(usize, usize)>) {
+        let notify = self.config.read().notify.clone();
+        if !notify.download {
+            return;
+        }
+        let Some(app) = &self.app else {
+            return;
+        };
+        if job.status == "completed" && notify.events.success {
+            let label = job_label(job);
+            emit_toast(app, "completed", "下载完成", &label);
+            crate::core::notify::notify(app, "download", None, "下载完成", &label);
+        } else if job.status == "failed" && notify.events.failed {
+            let label = job_label(job);
+            let text = format!("{label}：{}", failure_hint(&job.error));
+            emit_toast(app, "failed", "下载失败", &text);
+            crate::core::notify::notify(app, "download", None, "下载失败", &text);
+        }
+        if let Some((success, failed)) = summary {
+            if notify.events.all_done {
+                self.notify_all_done((success, failed));
             }
         }
     }
 
+    fn notify_all_done(&self, counts: (usize, usize)) {
+        let notify = self.config.read().notify.clone();
+        if !notify.download || !notify.events.all_done {
+            return;
+        }
+        let Some(app) = &self.app else {
+            return;
+        };
+        let (success, failed) = counts;
+        let text = if failed == 0 {
+            format!("本轮完成 {success} 个")
+        } else {
+            format!("本轮完成 {success} 个，失败 {failed} 个")
+        };
+        emit_toast(app, "all-done", "下载任务已完成", &text);
+        crate::core::notify::notify(app, "download", None, "下载任务已完成", &text);
+    }
+
     pub(super) fn fail_pending(&self, current_id: &str, message: &str) {
-        let updated = {
+        let (updated, summary) = {
             let mut inner = self.inner.lock();
             let stamp = now_string();
             let mut updated = Vec::new();
@@ -183,13 +214,17 @@ impl Downloader {
             inner.cancel_ids.remove(current_id);
             inner.last_emit.remove(current_id);
             inner.children.remove(current_id);
-            updated
+            inner.batch_failed += updated.len();
+            (updated, batch_summary(&mut inner))
         };
 
         for job in &updated {
             self.emit_job(job);
         }
         self.save();
+        if let Some(counts) = summary {
+            self.notify_all_done(counts);
+        }
     }
 
     pub(super) fn job_snapshot(&self, id: &str) -> Option<Job> {
@@ -263,6 +298,40 @@ impl Downloader {
 
 pub(super) fn is_active(job: &Job) -> bool {
     job.status == "queued" || job.status == "running"
+}
+
+/// 队列由空闲转入繁忙时开启新一轮批次；已有活跃任务则沿用当前批次。
+pub(super) fn begin_batch_if_idle(inner: &mut Inner) {
+    if inner.jobs.iter().any(is_active) {
+        return;
+    }
+    inner.batch_open = true;
+    inner.batch_success = 0;
+    inner.batch_failed = 0;
+}
+
+/// 队列全部结束且本轮有结果时返回 `(成功数, 失败数)` 并复位计数。
+///
+/// 全被取消（计数为 0）的批次不产生“全部完成”提醒。
+pub(super) fn batch_summary(inner: &mut Inner) -> Option<(usize, usize)> {
+    if !inner.batch_open || inner.jobs.iter().any(is_active) {
+        return None;
+    }
+    inner.batch_open = false;
+    let counts = (inner.batch_success, inner.batch_failed);
+    inner.batch_success = 0;
+    inner.batch_failed = 0;
+    if counts.0 + counts.1 == 0 {
+        return None;
+    }
+    Some(counts)
+}
+
+/// 读取下载记录文件；`Ok(None)` 表示文件尚不存在。
+///
+/// 启动初始化与备份恢复后的重载共用这一入口，避免两套加载逻辑。
+pub(super) fn read_jobs(path: &Path) -> Result<Option<Vec<Job>>, String> {
+    persist::load_json::<Vec<Job>>(path)
 }
 
 /// Restart policy: queued/running jobs are never resumed silently; they become

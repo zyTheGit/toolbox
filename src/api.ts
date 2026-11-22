@@ -11,6 +11,7 @@ import type {
   DbSchema,
   DbSessionInfo,
   DownloadRequest,
+  DownloadToast,
   HistoryPage,
   HistoryQuery,
   ImportOutcome,
@@ -111,6 +112,8 @@ export const events = {
     listen<Job>("job-updated", (e) => cb(e.payload)),
   onJobRemoved: (cb: (id: string) => void): Promise<UnlistenFn> =>
     listen<string>("job-removed", (e) => cb(e.payload)),
+  onDownloadNotify: (cb: (toast: DownloadToast) => void): Promise<UnlistenFn> =>
+    listen<DownloadToast>("download-notify", (e) => cb(e.payload)),
   onTasksUpdated: (cb: (tasks: Task[]) => void): Promise<UnlistenFn> =>
     listen<Task[]>("tasks-updated", (e) => cb(e.payload)),
   onTaskRunUpdated: (cb: (run: TaskRun) => void): Promise<UnlistenFn> =>

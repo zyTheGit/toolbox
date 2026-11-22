@@ -80,7 +80,12 @@ function emptyConfig(): AppConfig {
     },
     history: { enabled: true, maxEntries: 200 },
     security: { allowCommands: false },
-    notify: { download: true, task: true },
+    notify: {
+      download: true,
+      task: true,
+      events: { success: true, failed: true, allDone: false },
+      sound: false,
+    },
     quickTranslate: { enabled: false, shortcut: "CommandOrControl+Shift+T" },
     shortcuts: { translateSubmit: "CommandOrControl+Enter", dbRun: "CommandOrControl+Enter" },
     llm: defaultLlmConfig(),

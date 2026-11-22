@@ -369,3 +369,29 @@ fn reload_reads_restored_jobs_from_disk() {
     assert_eq!(jobs[0].status, "interrupted");
     assert!(!is_active(&jobs[0]));
 }
+
+#[test]
+fn failure_hint_strips_internal_tag_and_keeps_first_line() {
+    assert_eq!(
+        super::toast::failure_hint("[NET] 网络错误\n详细信息"),
+        "网络错误"
+    );
+    assert_eq!(super::toast::failure_hint("  \n普通错误  "), "普通错误");
+    assert_eq!(super::toast::failure_hint(""), "原因见任务日志");
+}
+
+#[test]
+fn job_label_prefers_name_then_file() {
+    let named = Job {
+        name: "课程 第一集".into(),
+        ..Job::default()
+    };
+    assert_eq!(super::toast::job_label(&named), "课程 第一集");
+
+    let file = Job {
+        file: "/tmp/video.mp4".into(),
+        ..Job::default()
+    };
+    assert_eq!(super::toast::job_label(&file), "video.mp4");
+    assert_eq!(super::toast::job_label(&Job::default()), "m3u8 任务");
+}

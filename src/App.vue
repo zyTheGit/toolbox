@@ -6,6 +6,7 @@
   >
     <n-message-provider>
       <n-dialog-provider>
+        <DownloadNotifier />
         <div class="app-shell">
           <aside class="sidebar">
             <div class="brand">
@@ -110,6 +111,7 @@ import { runUpdateCheck } from "./composables/useUpdateCheck";
 import { themeOverrides } from "./ui/theme";
 import type { IconName } from "./ui/icons";
 import AppIcon from "./components/AppIcon.vue";
+import DownloadNotifier from "./components/DownloadNotifier.vue";
 import TranslateView from "./views/TranslateView.vue";
 import DownloadView from "./views/DownloadView.vue";
 import TasksView from "./views/TasksView.vue";

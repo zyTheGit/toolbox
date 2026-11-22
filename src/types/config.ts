@@ -65,9 +65,18 @@ export interface SecurityConfig {
   allowCommands: boolean;
 }
 
+/** 下载事件的细分开关；总开关仍是 NotifyConfig.download。 */
+export interface NotifyEvents {
+  success: boolean;
+  failed: boolean;
+  allDone: boolean;
+}
+
 export interface NotifyConfig {
   download: boolean;
   task: boolean;
+  events: NotifyEvents;
+  sound: boolean;
 }
 
 export interface QuickTranslateConfig {

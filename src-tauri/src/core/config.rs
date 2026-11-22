@@ -266,6 +266,29 @@ mod tests {
     }
 
     #[test]
+    fn legacy_notify_config_gets_event_defaults() {
+        let mut value = serde_json::to_value(AppConfig::default()).unwrap();
+        value["notify"] = serde_json::json!({ "download": true, "task": true });
+
+        let config: AppConfig = serde_json::from_value(value.clone()).unwrap();
+        assert!(config.notify.events.success);
+        assert!(config.notify.events.failed);
+        assert!(!config.notify.events.all_done);
+        assert!(!config.notify.sound);
+
+        // 只写了部分事件字段时，其余字段走默认值而不是解析失败。
+        value["notify"] = serde_json::json!({
+            "download": true,
+            "task": true,
+            "events": { "success": false }
+        });
+        let config: AppConfig = serde_json::from_value(value).unwrap();
+        assert!(!config.notify.events.success);
+        assert!(config.notify.events.failed);
+        assert!(!config.notify.events.all_done);
+    }
+
+    #[test]
     fn blank_page_shortcuts_fall_back_to_defaults() {
         let mut config = AppConfig::default();
         config.shortcuts.translate_submit = "  ".into();

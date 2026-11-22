@@ -6,7 +6,7 @@ use super::args::validate_extra_args;
 use super::credentials::{
     has_credential_fields, provides_credentials, CREDENTIALS_MISSING,
 };
-use super::state::is_active;
+use super::state::{begin_batch_if_idle, is_active};
 use super::{Downloader, Inner};
 
 impl Downloader {
@@ -21,6 +21,8 @@ impl Downloader {
 
         let job = {
             let mut inner = self.inner.lock();
+            // 空闲时重试等同开启新一轮下载批次，汇总计数从零开始。
+            begin_batch_if_idle(&mut inner);
             let Inner {
                 jobs, credentials, ..
             } = &mut *inner;
